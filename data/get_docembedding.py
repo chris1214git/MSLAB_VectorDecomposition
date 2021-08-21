@@ -3,15 +3,11 @@ import numpy as np
 from tqdm import tqdm
 
 word2embedding = dict()
-with open("wordvectors.txt","r") as f:
-    word_num, dim = f.readline().strip().split()
-    dim = int(dim)
+with open("glove.6B.100d.txt","r") as f:
     for line in f:
         line = line.strip().split()
         word = line[0]
         embedding = list(map(float,line[1:]))
-        if len(embedding)!= dim:
-            continue
         word2embedding[word] = embedding
 
 print("Number of words:%d" % len(word2embedding))
