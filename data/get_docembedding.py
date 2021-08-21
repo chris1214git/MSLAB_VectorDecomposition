@@ -5,6 +5,7 @@ from tqdm import tqdm
 word2embedding = dict()
 with open("wordvectors.txt","r") as f:
     word_num, dim = f.readline().strip().split()
+    dim = int(dim)
     for line in f:
         line = line.strip().split()
         word = line[0]
