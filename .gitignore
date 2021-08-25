@@ -1,0 +1,4 @@
+./data/IMDB.txt
+./data/glove*
+./data/docvector.txt
+.ipynb_checkpoints/
