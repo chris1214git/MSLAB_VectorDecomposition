@@ -1,0 +1,1 @@
+{"dataset": "IMDB", "n_document": 500, "normalize_word_embedding": true, "min_word_freq_threshold": 20, "topk_word_freq_threshold": 100, "document_vector_agg_weight": "IDF", "select_topk_TFIDF": null, "embedding_file": "../data/glove.6B.100d.txt", "topk": [10, 30, 50]}

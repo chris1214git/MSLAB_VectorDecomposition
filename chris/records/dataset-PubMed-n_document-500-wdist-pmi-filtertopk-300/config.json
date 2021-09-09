@@ -1,1 +1,0 @@
-{"dataset": "PubMed", "n_document": 500, "normalize_word_embedding": true, "min_word_freq_threshold": 20, "topk_word_freq_threshold": 300, "document_vector_agg_weight": "pmi", "select_topk_TFIDF": null, "embedding_file": "../data/glove.6B.100d.txt"}
