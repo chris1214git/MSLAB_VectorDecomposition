@@ -15,7 +15,7 @@ def evaluate_sklearn(pred, ans):
     one_hot_ans = np.arange(ans.shape[0])[ans > 0]
 
     sorted_score = np.argsort(pred)
-    for topk in [50, 100, 200]:
+    for topk in [10, 30, 50]:
         one_hot_pred = sorted_score[-topk:]
         hit = np.intersect1d(one_hot_pred, one_hot_ans)
         percision = len(hit) / topk
@@ -25,9 +25,9 @@ def evaluate_sklearn(pred, ans):
         
     ans = ans.reshape(1, -1)
     pred = pred.reshape(1, -1)
+    results['ndcg@10'] = (ndcg_score(ans, pred, k=10))
+    results['ndcg@30'] = (ndcg_score(ans, pred, k=30))
     results['ndcg@50'] = (ndcg_score(ans, pred, k=50))
-    results['ndcg@100'] = (ndcg_score(ans, pred, k=100))
-    results['ndcg@200'] = (ndcg_score(ans, pred, k=200))
     results['ndcg@all'] = (ndcg_score(ans, pred, k=None))
     
     return results
