@@ -3,3 +3,7 @@ data/glove*
 data/docvector.txt
 data/wiki*
 .ipynb_checkpoints/
+__pycache__
+*.npy
+20news*
+test.py
