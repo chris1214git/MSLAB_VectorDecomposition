@@ -32,7 +32,7 @@ def load_document(dataset):
                                 shuffle=True, random_state=42, return_X_y=True)
         documents = [doc.strip("\n") for doc in raw_text]
     elif dataset == "IMDB":
-        num_classes = 1
+        num_classes = 2
         documents = []
         target = []
 
@@ -134,28 +134,29 @@ class Vocabulary:
             self.stoi[token] for token in tokenized_text if token in self.stoi
         ]
 
-class LSTMEncoder(nn.Module):
-    def __init__(self,vocab_size, hidden_size, output_dim):
+class LSTM(nn.Module):
+    def __init__(self, vocab_size,hidden_dim, output_dim,dropout_rate,):
         super().__init__()
-        self.embedding = nn.Embedding(vocab_size, hidden_size)
-        self.lstm = nn.GRU(hidden_size,hidden_size, batch_first=True)
-        self.output_layer = nn.Linear(hidden_size,output_dim)
+        self.embedding = nn.Embedding(vocab_size, hidden_dim, padding_idx=0)
+        self.lstm = nn.LSTM(hidden_dim, hidden_dim,batch_first=True)
+        self.fc = nn.Linear(hidden_dim, output_dim)
+        self.dropout = nn.Dropout(dropout_rate)
         
-    def forward(self,context_word, length):
-        word_embedding = self.embedding(context_word)
-        seq_pack = pack_padded_sequence(word_embedding,length,batch_first=True,enforce_sorted=False)
-        _, last_state = self.lstm(seq_pack)
-        last_state = last_state.squeeze(0)
-        output = self.output_layer(last_state)
-        
-        return output
+    def forward(self, ids, length):
+        embedded = self.dropout(self.embedding(ids))
+        packed_embedded = pack_padded_sequence(embedded, length, batch_first=True, 
+                                                            enforce_sorted=False)
+        packed_output, (hidden, cell) = self.lstm(packed_embedded)
+        hidden = self.dropout(hidden[-1])
+        prediction = self.fc(hidden)
+        return prediction
 
-    def get_docvec(self,context_word, length):
-        word_embedding = self.embedding(context_word)
-        seq_pack = pack_padded_sequence(word_embedding,length,batch_first=True,enforce_sorted=False)
-        _, last_state = self.lstm(seq_pack)
-        last_state = last_state.squeeze(0)
-        return last_state
+    def get_docvec(self,ids, length):
+        embedded = self.dropout(self.embedding(ids))
+        packed_embedded = pack_padded_sequence(embedded, length, batch_first=True, 
+                                                            enforce_sorted=False)
+        packed_output, (hidden, cell) = self.lstm(packed_embedded)
+        return hidden[-1]
 
 def evaluate(model, test_loader, device):
     accuracy = []
@@ -174,14 +175,16 @@ if __name__ == '__main__':
     parser.add_argument('--topk_word_freq_threshold', type=int, default=100)
     parser.add_argument('--seed', type=int, default=123)
     parser.add_argument('--dim', type=int, default=64)
+    parser.add_argument('--max_seq_length', type=int, default=64)
 
     args = parser.parse_args()
     config = vars(args)
 
     # load document
-    print(f"Setting seeds:{config['seed']}")
+    # print(f"Setting seeds:{config['seed']}")
     same_seeds(config["seed"])
-    documents, target, num_classes = load_document("20news")
+    documents, target, num_classes = load_document(config["dataset"])
+    max_seq_length = config["max_seq_length"]
 
     # build vocabulary
     vocab = Vocabulary(min_word_freq_threshold=config["min_word_freq_threshold"], 
@@ -191,7 +194,7 @@ if __name__ == '__main__':
     tokenize_data = []
     valid_label = []
     for sen_id, sen in enumerate(tqdm(documents, desc="Numericalizing")):
-        numerical_output = vocab.numericalize(sen)
+        numerical_output = vocab.numericalize(sen)[:max_seq_length]
         
         # some document becomes empty after filtering word
         if len(numerical_output) > 0:
@@ -199,7 +202,7 @@ if __name__ == '__main__':
             valid_label.append(target[sen_id])
 
     # prepare pytorch input
-    tokenize_data = sorted(tokenize_data, key = lambda x: len(x), reverse = True)
+    # tokenize_data = sorted(tokenize_data, key = lambda x: len(x), reverse = True)
     seq_length = torch.IntTensor([len(i) for i in tokenize_data])
     paded_context = pad_sequence(tokenize_data,batch_first=True,padding_value=0)
     target_tensor = torch.LongTensor(valid_label)
@@ -211,11 +214,12 @@ if __name__ == '__main__':
     train_dataset, valid_dataset = random_split(dataset,lengths=[train_length,valid_length])
     train_loader = DataLoader(train_dataset,batch_size = 128)
     valid_loader = DataLoader(valid_dataset,batch_size = 128)
+    full_loader =  DataLoader(dataset,batch_size = 128)
 
     # training
     device = "cuda:0"
-    model = LSTMEncoder(len(vocab), config["dim"],num_classes).to(device)
-    optimizer = torch.optim.RMSprop(model.parameters(), lr=0.01)
+    model = LSTM(len(vocab), config["dim"],num_classes,0.5).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     loss_function = nn.CrossEntropyLoss()
 
     for epoch in range(100):
@@ -239,11 +243,15 @@ if __name__ == '__main__':
         print(f"[Epoch {epoch:02d}] Valid Accuracy:{valid_acc:.4f}")
 
     # save document embedding
+    model.eval()
     document_representation = []
-    for word,length, _ in tqdm(train_loader):
+    for word,length, _ in tqdm(full_loader):
         word = word.to(device)
         with torch.no_grad():
             vectors = model.get_docvec(word,length)
             vectors = vectors.detach().cpu().numpy().tolist()
         document_representation.extend(vectors)
+
+    print("Saving document vectors")
+    np.save(f"docvec_20news_LSTM_{config['dim']}d.npy", document_representation)
         
