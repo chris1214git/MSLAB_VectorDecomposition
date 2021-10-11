@@ -429,7 +429,7 @@ print("Average length of document:", np.mean(l))
 word_vectors = np.array(dataset.vocab.word_vectors)
 word_vectors.shape
 
-pred = np.zeros(100)
+pred = np.zeros(word_vectors.shape[1])
 cnt = 0
 for word_idx in dataset.test_words[0]:
     pred += word_vectors[word_idx] * dataset.vocab.word_weight[dataset.vocab.itos[word_idx]]
