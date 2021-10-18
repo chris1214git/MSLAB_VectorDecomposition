@@ -7,3 +7,5 @@ __pycache__
 *.npy
 20news*
 test.py
+*.pth
+*.png
