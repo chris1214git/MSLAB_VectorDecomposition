@@ -1,0 +1,17 @@
+1. MLM all positive label
+    - Linear (embedding size -> vocab size)
+        F1@10   0.042
+        F1@30   0.055
+        F1@50   0.057
+        ndcg@10 0.120
+        ndcg@30 0.110
+        ndcg@50 0.109
+        ndcg@all    0.341
+    - Two layer (embedding size -> 1024, 1024 -> vocab size)
+        F1@10   
+        F1@30   
+        F1@50   
+        ndcg@10 
+        ndcg@30 
+        ndcg@50 
+        ndcg@all
