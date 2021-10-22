@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 def ListNet(y_pred, y_true, eps=1e-10):
-    # (1) y_pred: the decoded vecto. 
+    # (1) y_pred: the decoded vector. 
     #     ex: tfidf score of each word in certain document.
     # (2) y_true: the vector before encoded. 
     #     ex: same as above.
@@ -35,11 +35,12 @@ def topk_ListNet(y_pred, y_true, y_rank, eps=1e-10, topk=64):
     y_true = y_true.clone()
     y_rank = y_rank.clone()
 
-    y_pred = torch.gather(y_pred, 1, y_rank[:, :topk])
-    y_true = torch.gather(y_true, 1, y_rank[:, :topk])
-  
     pred_smax = torch.nn.functional.softmax(y_pred, dim=1)
     true_smax = torch.nn.functional.softmax(y_true, dim=1)
+    
+    pred_smax = torch.gather(pred_smax, 1, y_rank[:, :topk])
+    true_smax = torch.gather(true_smax, 1, y_rank[:, :topk])
+  
   
     pred = pred_smax + eps
     preds_log = torch.log(pred)
