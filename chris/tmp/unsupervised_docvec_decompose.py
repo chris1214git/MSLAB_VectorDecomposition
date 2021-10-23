@@ -1,8 +1,36 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# ### raw data
+# * word embedding: glove
+# * doc text: ./data/IMDB.txt
+
+# ### dataset
+# 1. IMDB
+# 2. CNNNews
+# 3. [PubMed](https://github.com/LIAAD/KeywordExtractor-Datasets/blob/master/datasets/PubMed.zip)
+
+# ### preprocess
+# 1. filter too frequent and less frequent words
+# 2. stemming
+# 3. document vector aggregation
+
+# ### model
+# 1. TopK
+# 2. Sklearn
+# 3. Our model
+
+# ### evaluation
+# 1. F1
+# 2. NDCG
+
+# In[1]:
+
+
 import os
 from collections import defaultdict
 import math
 import numpy as np 
-import random
 import re
 import torch
 import torch.nn as nn
@@ -29,32 +57,25 @@ nltk.download('stopwords')
 import matplotlib.pyplot as plt 
 import matplotlib
 matplotlib.use('Agg')
-
-seed = 33
 import pandas as pd
-import time
+
+import warnings
+warnings.filterwarnings("ignore")
 
 # ## Preprocess config
 
+# In[2]:
+
 import argparse
 parser = argparse.ArgumentParser(description='document decomposition.')
-parser.add_argument('--dataset', type=str, default="CNN")
-parser.add_argument('--n_document', type=int, default=1e9)
-parser.add_argument('--min_word_freq_threshold', type=int, default=20)
-parser.add_argument('--topk_word_freq_threshold', type=int, default=100)
-parser.add_argument('--document_vector_agg_weight', type=str, default='IDF')
+parser.add_argument('--dataset', type=str, default="IMDB")
+parser.add_argument('--n_document', type=int, default=500)
 parser.add_argument('--normalize_word_embedding', action='store_true')
-parser.add_argument('--no_document_vector_weight_normalize', action='store_false')
+parser.add_argument('--min_word_freq_threshold', type=int, default=20)
+parser.add_argument('--topk_word_freq_threshold', type=int, default=300)
+parser.add_argument('--document_vector_agg_weight', type=str, default='mean')
 parser.add_argument('--embedding_file', type=str, default='glove.6B.100d.txt')
 parser.add_argument('--topk', type=int, nargs='+', default=[10, 30, 50])
-
-parser.add_argument('--lr', type=float, default=0.1)
-parser.add_argument('--epochs', type=int, default=10000)
-parser.add_argument('--momentum', type=float, default=0.999)
-parser.add_argument('--L1', type=float, default=1e-5)
-parser.add_argument('--w_sum_reg', type=float, default=1e-2)
-parser.add_argument('--w_sum_reg_mul', type=float, default=1)
-parser.add_argument('--w_clip_value', type=float, default=0)
 
 args = parser.parse_args()
 # In[2]:
@@ -65,72 +86,38 @@ config = {}
 config["dataset"] = args.dataset # "IMDB" "CNN", "PubMed"
 config["n_document"] = args.n_document
 config["normalize_word_embedding"] = args.normalize_word_embedding
-print(config["normalize_word_embedding"])
 config["min_word_freq_threshold"] = args.min_word_freq_threshold
 config["topk_word_freq_threshold"] = args.topk_word_freq_threshold
 config["document_vector_agg_weight"] = args.document_vector_agg_weight # ['mean', 'IDF', 'uniform', 'gaussian', 'exponential', 'pmi']
-config["document_vector_weight_normalize"] = args.no_document_vector_weight_normalize # weighted sum or mean, True for mean, False for sum 
 config["select_topk_TFIDF"] = None
 config["embedding_file"] = os.path.join("../data", args.embedding_file)
 config["topk"] = args.topk
 
-# In[2]:
-
-
-# config = {}
-
-# config["dataset"] = "CNN" # "IMDB" "CNN", "PubMed"
-# config["n_document"] = 100
-# config["normalize_word_embedding"] = False
-# config["min_word_freq_threshold"] = 20
-# config["topk_word_freq_threshold"] = 100
-# config["document_vector_agg_weight"] = 'IDF' # ['mean', 'IDF', 'uniform', 'gaussian', 'exponential', 'pmi']
-# config["document_vector_weight_normalize"] = True # weighted sum or mean, True for mean, False for sum 
-# config["select_topk_TFIDF"] = None # ignore
-# config["embedding_file"] = "../data/glove.6B.100d.txt"
-# config["topk"] = [10, 30, 50]
-
-
 # In[3]:
+sk_lasso_epoch = 10000
+our_lasso_epoch = 50000
+is_notebook = False
 
 
-def in_notebook():
-    try:
-        from IPython import get_ipython
-        if get_ipython() is None:
-            return False
-    except ImportError:
-        return False
-    return True
+# load word embedding
+embedding_file = config["embedding_file"]
+word2embedding = dict()
+word_dim = int(re.findall(r".(\d+)d",embedding_file)[0])
+
+with open(embedding_file,"r") as f:
+    for line in tqdm(f):
+        line = line.strip().split()
+        word = line[0]
+        embedding = list(map(float,line[1:]))
+        word2embedding[word] = np.array(embedding)
+
+print("Number of words:%d" % len(word2embedding))
 
 
 # In[4]:
 
 
-def load_word2emb(embedding_file):
-    word2embedding = dict()
-    word_dim = int(re.findall(r".(\d+)d", embedding_file)[0])
-
-    with open(embedding_file, "r") as f:
-        for line in tqdm(f):
-            line = line.strip().split()
-            word = line[0]
-            embedding = list(map(float, line[1:]))
-            word2embedding[word] = np.array(embedding)
-
-    print("Number of words:%d" % len(word2embedding))
-
-    return word2embedding
-
-word2embedding = load_word2emb(config["embedding_file"])
-
-
-# In[5]:
-
-
 def normalize_wordemb(word2embedding):
-    # Every word emb should have norm 1
-    
     word_emb = []
     word_list = []
     for word, emb in word2embedding.items():
@@ -151,55 +138,38 @@ if config["normalize_word_embedding"]:
     normalize_wordemb(word2embedding)
 
 
-# In[6]:
+# In[5]:
 
 
 class Vocabulary:
-    def __init__(self, word2embedding, config):
+    def __init__(self, word2embedding, min_word_freq_threshold=0, topk_word_freq_threshold=0):
         # The low frequency words will be assigned as <UNK> token
         self.itos = {0: "<UNK>"}
         self.stoi = {"<UNK>": 0}
         
         self.word2embedding = word2embedding
-        self.config = config
-
+        self.min_word_freq_threshold = min_word_freq_threshold
+        self.topk_word_freq_threshold = topk_word_freq_threshold
+        
         self.word_freq_in_corpus = defaultdict(int)
         self.IDF = {}
         self.ps = PorterStemmer()
         self.stop_words = set(stopwords.words('english'))
-        
-        self.word_dim = len(word2embedding['the'])
+
     def __len__(self):
         return len(self.itos)
 
+#     @staticmethod
     def tokenizer_eng(self, text):
         text = re.sub(r'[^A-Za-z0-9 ]+', '', text)
         text = text.strip().split()
         
         return [self.ps.stem(w) for w in text if w.lower() not in self.stop_words]
-    
-    def read_raw(self):        
-        if self.config["dataset"] == 'IMDB':
-            data_file_path = '../data/IMDB.txt'
-        elif self.config["dataset"] == 'CNN':
-            data_file_path = '../data/CNN.txt'
-        elif self.config["dataset"] == 'PubMed':
-            data_file_path = '../data/PubMed.txt'
-        
-        # raw documents
-        self.raw_documents = []
-        with open(data_file_path,'r',encoding='utf-8') as f:
-            for line in tqdm(f, desc="Loading documents"):
-                self.raw_documents.append(line.strip("\n"))
-                
-        return self.raw_documents
-    
-    def build_vocabulary(self):
-        sentence_list = self.raw_documents
-        
+
+    def build_vocabulary(self, sentence_list):
         self.doc_freq = defaultdict(int) # # of document a word appear
         self.document_num = len(sentence_list)
-        self.word_vectors = [[0]*self.word_dim] # unknown word emb
+        self.word_vectors = [[0]*word_dim] # unknown word emb
         
         for sentence in tqdm(sentence_list, desc="Preprocessing documents"):
             # for doc_freq
@@ -225,7 +195,7 @@ class Vocabulary:
         # delete less freq words:
         delete_words = []
         for word, v in self.word_freq_in_corpus.items():
-            if v < self.config["min_word_freq_threshold"]:
+            if v < self.min_word_freq_threshold:
                 delete_words.append(word)     
         for word in delete_words:
             del self.IDF[word]    
@@ -236,7 +206,7 @@ class Vocabulary:
         IDF = [(word, freq) for word, freq in self.IDF.items()]
         IDF.sort(key=lambda x: x[1])
 
-        for i in range(self.config["topk_word_freq_threshold"]):
+        for i in range(self.topk_word_freq_threshold):
             print(word)
             word = IDF[i][0]
             del self.IDF[word]
@@ -276,22 +246,13 @@ class Vocabulary:
                 self.word_weight[pair[0]] += score
                 self.word_weight[pair[1]] += score
                 
-    def calculate_document_vector(self):
-        # Return
-        # document_vectors: weighted sum of word emb
-        # document_answers_idx: doc to word index list
-        # document_answers_wsum: word weight summation, e.g. total TFIDF score of a doc
-        
-        document_vectors = [] 
+    def calculate_document_vector(self, sentence_list, agg, n_document, select_topk_TFIDF=None):
+        document_vectors = []
         document_answers = []
-        document_answers_wsum = []
-        
-        sentence_list = self.raw_documents
-        agg = self.config["document_vector_agg_weight"]
-        n_document = self.config["n_document"]
-        select_topk_TFIDF = self.config["select_topk_TFIDF"]
+        document_answers_w = []
         
         self.init_word_weight(sentence_list, agg)
+        
         for sentence in tqdm(sentence_list[:min(n_document, len(sentence_list))], desc="calculate document vectors"):
             document_vector = np.zeros(len(self.word_vectors[0]))
             select_words = []
@@ -326,13 +287,11 @@ class Vocabulary:
                 print('error', sentence)
                 continue
             else:
-                if self.config["document_vector_weight_normalize"]:
-                    document_vector /= total_weight
-                    total_weight = 1
+                document_vector /= total_weight
             
             document_vectors.append(document_vector)
             document_answers.append(select_words)
-            document_answers_wsum.append(total_weight)
+            document_answers_w.append(total_weight)
         
         # get answers
         document_answers_idx = []    
@@ -342,12 +301,8 @@ class Vocabulary:
                 if token in self.stoi:
                     ans_idx.append(self.stoi[token])                    
             document_answers_idx.append(ans_idx)
-        
-        self.document_vectors = document_vectors
-        self.document_answers_idx = document_answers_idx
-        self.document_answers_wsum = document_answers_wsum
-        
-        return document_vectors, document_answers_idx, document_answers_wsum
+
+        return document_vectors, document_answers_idx, document_answers_w
         
     def numericalize(self, text):
         tokenized_text = self.tokenizer_eng(text)
@@ -356,98 +311,153 @@ class Vocabulary:
             self.stoi[token] if token in self.stoi else self.stoi["<UNK>"]
             for token in tokenized_text
         ]
-    
-    def check_docemb(self):
-        word_vectors = np.array(self.word_vectors)
-        pred = np.zeros(word_vectors.shape[1])
-        cnt = 0
 
-        for word_idx in self.document_answers_idx[0]:
-            pred += word_vectors[word_idx] * self.word_weight[self.itos[word_idx]]
-            cnt += self.word_weight[self.itos[word_idx]]
+
+# In[6]:
+
+
+class CBowDataset(Dataset):
+    def __init__(self, 
+                 raw_data_file_path,
+                 word2embedding,
+                 skip_header = False,
+                 n_document = None, # read first n document
+                 min_word_freq_threshold = 20, # eliminate less freq words
+                 topk_word_freq_threshold = 5, # eliminate smallest k IDF words
+                 select_topk_TFIDF = None, # select topk tf-idf as ground-truth
+                 document_vector_agg_weight = 'mean',
+                 ):
+
+        assert document_vector_agg_weight in ['mean', 'IDF', 'uniform', 'gaussian', 'exponential', 'pmi']
         
-        if self.config["document_vector_weight_normalize"]:
-            pred /= cnt
-        assert np.sum(self.document_vectors[0]) - np.sum(pred) == 0
+        # raw documents
+        self.documents = []
+        
+        with open(raw_data_file_path,'r',encoding='utf-8') as f:
+            if skip_header:
+                f.readline()
+            for line in tqdm(f, desc="Loading documents"):
+                # read firt n document
+                # if n_document is not None and len(self.documents) >= n_document:
+                #     break    
+                self.documents.append(line.strip("\n"))
+
+        # build vocabulary
+        self.vocab = Vocabulary(word2embedding, min_word_freq_threshold, topk_word_freq_threshold)
+        self.vocab.build_vocabulary(self.documents)
+        self.vocab_size = len(self.vocab)
+
+        # calculate document vectors
+        self.document_vectors, self.document_answers, self.document_answers_w = self.vocab.calculate_document_vector(self.documents,                                                                                            document_vector_agg_weight, n_document, select_topk_TFIDF)
+                
+        # train-test split
+        # training
+        self.train_split_ratio = 0.8
+        self.train_length = int(len(self.document_answers) * self.train_split_ratio)
+        self.train_vectors = self.document_vectors[:self.train_length]
+        self.train_words = self.document_answers[:self.train_length]
+        self.document_ids = list(range(self.train_length))
+        self.generator = cycle(self.context_target_generator())
+        self.dataset_size = sum([len(s) for s in self.train_words])
+        
+        # testing
+        self.test_vectors = self.document_vectors[self.train_length:]
+        self.test_words = self.document_answers[self.train_length:]
+
+    def context_target_generator(self):
+        np.random.shuffle(self.document_ids) # inplace shuffle
+
+        # randomly select a document and create its training example
+        for document_id in self.document_ids: 
+            word_list = set(self.train_words[document_id])
+            negative_sample_space = list(set(range(self.vocab_size)) - word_list)
+            negative_samples = np.random.choice(negative_sample_space,size=len(word_list),replace = False)
+            for word_id, negative_wordID in zip(word_list, negative_samples):
+                yield [document_id, word_id, negative_wordID]
+                
+    def __getitem__(self, idx):
+        doc_id, word_id, negative_wordID = next(self.generator)
+        doc_id = torch.FloatTensor(self.document_vectors[doc_id])
+        word_id = torch.FloatTensor(self.vocab.word_vectors[word_id])
+        negative_word = torch.FloatTensor(self.vocab.word_vectors[negative_wordID])
+
+        return doc_id, word_id, negative_word
+
+    def __len__(self):
+        return self.dataset_size 
 
 
 # In[7]:
 
 
-def build_vocab(config, word2embedding):
-    # build vocabulary
-    vocab = Vocabulary(word2embedding, config)
-    vocab.read_raw()
-    vocab.build_vocabulary()
-    vocab_size = len(vocab)
-    # get doc emb
-    vocab.calculate_document_vector()
-    vocab.check_docemb()
-    
-    return vocab
+# load and build torch dataset
+if config["dataset"] == 'IMDB':
+    data_file_path = '../data/IMDB.txt'
+elif config["dataset"] == 'CNN':
+    data_file_path = '../data/CNN.txt'
+elif config["dataset"] == 'PubMed':
+    data_file_path = '../data/PubMed.txt'
 
-vocab = build_vocab(config, word2embedding)
+print("Building dataset....")
+dataset = CBowDataset(
+                    raw_data_file_path=data_file_path,
+                    word2embedding=word2embedding,
+                    skip_header=False,
+                    n_document = config["n_document"],
+                    min_word_freq_threshold = config["min_word_freq_threshold"],
+                    topk_word_freq_threshold = config["topk_word_freq_threshold"],
+                    document_vector_agg_weight = config["document_vector_agg_weight"],
+                    select_topk_TFIDF = config["select_topk_TFIDF"]
+                    )
 
 
 # In[8]:
 
 
 print("Finish building dataset!")
-print(f"Number of documents:{len(vocab.raw_documents)}")
-print(f"Number of words:{len(vocab)}")
+print(f"Number of documents:{len(dataset.documents)}")
+print(f"Number of words:{dataset.vocab_size}")
 
-l = list(map(len, vocab.document_answers_idx))
+l = list(map(len, dataset.document_answers))
 print("Average length of document:", np.mean(l))
 
 
 # In[9]:
 
 
-word_vectors = np.array(vocab.word_vectors)
-print("word_vectors:", word_vectors.shape)
+# check test doc vectors' correctness
+word_vectors = np.array(dataset.vocab.word_vectors)
+word_vectors.shape
 
-document_vectors = np.array(vocab.document_vectors)
-print("document_vectors", document_vectors.shape)
-
-document_answers_wsum = np.array(vocab.document_answers_wsum).reshape(-1, 1)
-print("document_answers_wsum", document_answers_wsum.shape)
-
-# create weight_ans
-document_answers_idx = vocab.document_answers_idx
-
-# random shuffle
-shuffle_idx = list(range(len(document_vectors)))
-random.Random(seed).shuffle(shuffle_idx)
-
-document_vectors = document_vectors[shuffle_idx]
-document_answers_wsum = document_answers_wsum[shuffle_idx]
-document_answers_idx = [document_answers_idx[idx] for idx in shuffle_idx]
+pred = np.zeros(word_vectors.shape[1])
+cnt = 0
+for word_idx in dataset.test_words[0]:
+    pred += word_vectors[word_idx] * dataset.vocab.word_weight[dataset.vocab.itos[word_idx]]
+    cnt += dataset.vocab.word_weight[dataset.vocab.itos[word_idx]]
+print(dataset.test_vectors[0] - pred/cnt)
 
 
 # In[10]:
 
 
-# onthot_ans: word freq matrix
-# weight_ans: TFIDF matrix
+## create weight_ans
+document_answers = dataset.document_answers
 
-onehot_ans = np.zeros((len(document_answers_idx), word_vectors.shape[0]))
-weight_ans = np.zeros((len(document_answers_idx), word_vectors.shape[0]))
+onehot_ans = np.zeros((len(document_answers), word_vectors.shape[0]))
+weight_ans = np.zeros((len(document_answers), word_vectors.shape[0]))
 print(weight_ans.shape)
 
-for i in tqdm(range(len(document_answers_idx))):
-    for word_idx in document_answers_idx[i]:
-        weight_ans[i, word_idx] += vocab.word_weight[vocab.itos[word_idx]]
+for i in tqdm(range(len(document_answers))):
+    for word_idx in document_answers[i]:
+        weight_ans[i, word_idx] += dataset.vocab.word_weight[dataset.vocab.itos[word_idx]]
         onehot_ans[i, word_idx] += 1
-        
-    if config["document_vector_weight_normalize"]:
-        weight_ans[i] /= np.sum(weight_ans[i])
 
 
 # In[11]:
 
 
-# check
-assert np.sum(document_vectors - np.dot(weight_ans, word_vectors) > 1e-10) == 0
+document_vectors = np.array(dataset.document_vectors)
+document_answers_w = np.array(dataset.document_answers_w).reshape(-1, 1)
 
 
 # ## Results
@@ -457,10 +467,6 @@ assert np.sum(document_vectors - np.dot(weight_ans, word_vectors) > 1e-10) == 0
 
 final_results = []
 select_columns = ['model']
-for topk in config["topk"]:
-    select_columns.append('percision@{}'.format(topk))
-for topk in config["topk"]:
-    select_columns.append('recall@{}'.format(topk))
 for topk in config["topk"]:
     select_columns.append('F1@{}'.format(topk))
 for topk in config["topk"]:
@@ -475,7 +481,7 @@ select_columns
 
 
 train_size_ratio = 1
-train_size = int(len(document_answers_idx) * train_size_ratio)
+train_size = int(len(dataset.document_answers) * train_size_ratio)
 train_size
 
 
@@ -490,13 +496,13 @@ topk_results = {}
 # In[15]:
 
 
-test_ans = document_answers_idx[:train_size]
+test_ans = dataset.document_answers[:train_size]
 
 
 # In[16]:
 
 
-word_freq = [(word, freq) for word, freq in vocab.word_freq_in_corpus.items()]
+word_freq = [(word, freq) for word, freq in dataset.vocab.word_freq_in_corpus.items()]
 word_freq.sort(key=lambda x:x[1], reverse=True)
 word_freq[:10]
 
@@ -510,7 +516,7 @@ def topk_word_evaluation(k=50):
     pr, re = [], []
     for ans in tqdm(test_ans):
         ans = set(ans)
-        ans = [vocab.itos[a] for a in ans]
+        ans = [dataset.vocab.itos[a] for a in ans]
 
         hit = []
         for word in ans:
@@ -541,22 +547,22 @@ for topk in config['topk']:
 
 def topk_word_evaluation_NDCG(k=50):
     freq_word =[word for (word, freq) in word_freq]
-    freq_word_idx = [vocab.stoi[word] for word in freq_word if word in vocab.stoi]
+    freq_word_idx = [dataset.vocab.stoi[word] for word in freq_word if word in dataset.vocab.stoi]
     
-    scores = np.zeros(len(vocab.word_vectors))
+    scores = np.zeros(len(dataset.vocab.word_vectors))
     for rank, idx in enumerate(freq_word_idx):
-        scores[idx] = len(vocab.word_vectors) - rank
+        scores[idx] = len(dataset.vocab.word_vectors) - rank
     
     NDCGs = []
     
     for ans in tqdm(test_ans):
-        weight_ans = np.zeros(len(vocab.word_vectors))
+        weight_ans = np.zeros(len(dataset.vocab.word_vectors))
         
         for word_idx in ans:
             if word_idx == 0:
                 continue
-            word = vocab.itos[word_idx]
-            weight_ans[word_idx] += vocab.IDF[word]
+            word = dataset.vocab.itos[word_idx]
+            weight_ans[word_idx] += dataset.vocab.IDF[word]
 
         NDCG_score = ndcg_score(weight_ans.reshape(1,-1), scores.reshape(1,-1), k=k)
         NDCGs.append(NDCG_score)
@@ -566,10 +572,10 @@ def topk_word_evaluation_NDCG(k=50):
     return np.mean(NDCGs)
 
 
-# for topk in config['topk']:
-#     topk_results["ndcg@{}".format(topk)] = topk_word_evaluation_NDCG(k=topk)
+for topk in config['topk']:
+    topk_results["ndcg@{}".format(topk)] = topk_word_evaluation_NDCG(k=topk)
     
-# topk_results["ndcg@all"] = topk_word_evaluation_NDCG(k=None)
+topk_results["ndcg@all"] = topk_word_evaluation_NDCG(k=None)
 
 
 # In[19]:
@@ -610,8 +616,6 @@ def evaluate_sklearn(pred, ans):
         recall = len(hit) / len(one_hot_ans)
         f1 = 2 * percision * recall / (percision + recall) if (percision + recall) > 0 else 0
         
-        results['percision@{}'.format(topk)] = percision
-        results['recall@{}'.format(topk)] = recall
         results['F1@{}'.format(topk)] = f1
         
     ans = ans.reshape(1, -1)
@@ -652,13 +656,10 @@ final_results.append(results)
 results
 
 
-# ### lasso
-
 # In[25]:
 
 
 results = []
-sk_lasso_epoch = 10000
 
 for doc_id, doc_emb in enumerate(tqdm(document_vectors[:train_size])):
     x = word_vectors.T
@@ -692,7 +693,7 @@ device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 # In[28]:
 
 
-class Custom_Lasso_Dataset(Dataset):
+class Custom_Dataset(Dataset):
     def __init__(self, 
                  doc_vectors,
                  doc_w_sum,
@@ -731,7 +732,7 @@ class LR(nn.Module):
 # In[30]:
 
 
-def evaluate_Custom_Lasso(model, train_loader):
+def evaluate_NDCG(model, train_loader):
     results = {}
     model.eval()
     
@@ -741,15 +742,11 @@ def evaluate_Custom_Lasso(model, train_loader):
 
     # F1
     F1s = []
-    precisions = []
-    recalls = []
     for i in range(true_relevance.shape[0]):
         one_hot_ans = np.arange(true_relevance.shape[1])[true_relevance[i] > 0]
         pred = scores[i]
         
-        F1_ = []
-        percision_ = []
-        recall_ = []
+        F1 = []
         for topk in config["topk"]:
             one_hot_pred = np.argsort(pred)[-topk:]
             
@@ -757,23 +754,14 @@ def evaluate_Custom_Lasso(model, train_loader):
             percision = len(hit) / topk
             recall = len(hit) / len(one_hot_ans)
             
-            F1 = 2 * percision * recall / (percision + recall) if (percision + recall) > 0 else 0
-            F1_.append(F1)
-            percision_.append(percision)
-            recall_.append(recall)
-            
-        F1s.append(F1_)
-        precisions.append(percision_)
-        recalls.append(recall_)
+            ans = 2 * percision * recall / (percision + recall) if (percision + recall) > 0 else 0
+            F1.append(ans)
+        F1s.append(F1)
         
     F1s = np.mean(F1s, axis=0)
-    precisions = np.mean(precisions, axis=0)
-    recalls = np.mean(recalls, axis=0)
     
     for i, topk in enumerate(config["topk"]):
         results['F1@{}'.format(topk)] = F1s[i]
-        results['percision@{}'.format(topk)] = precisions[i]
-        results['recall@{}'.format(topk)] = recalls[i]
 
     # NDCG
     for topk in config["topk"]:
@@ -789,7 +777,7 @@ def evaluate_Custom_Lasso(model, train_loader):
 batch_size = 100
 print('document num', train_size)
 
-train_dataset = Custom_Lasso_Dataset(document_vectors[:train_size], document_answers_wsum[:train_size], weight_ans[:train_size])
+train_dataset = Custom_Dataset(document_vectors[:train_size], document_answers_w[:train_size], weight_ans[:train_size])
 train_loader  = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
 
 
@@ -797,19 +785,20 @@ train_loader  = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size
 
 # In[32]:
 
+
 # setting
-lr = args.lr
-momentum = args.momentum
+lr = 0.5
+momentum = 0.99
 weight_decay = 0
 nesterov = False # True
 
-n_epoch = args.epochs
+n_epoch = our_lasso_epoch
 
-w_sum_reg = args.w_sum_reg
-w_sum_reg_mul = args.w_sum_reg_mul
-w_clip_value = args.w_clip_value
+w_sum_reg = 1e-3
+w_sum_reg_mul = 0.9
+w_clip_value = 0
 
-L1 = args.L1
+L1 = 1e-6
 
 verbose = False
 valid_epoch = 100
@@ -837,8 +826,7 @@ for epoch in tqdm(range(n_epoch)):
         doc_w_sum = doc_w_sum.to(device)
         doc_ids = doc_ids.to(device)
         
-        w_reg = doc_w_sum * w_sum_reg_mul
-        # w_reg = (torch.ones(doc_embs.size(0), 1) * w_sum_reg_mul).to(device)
+        w_reg = (torch.ones(doc_embs.size(0), 1) * w_sum_reg_mul).to(device)
         
         # MSE loss
         pred_doc_embs = model(doc_ids, word_vectors_tensor)     
@@ -868,7 +856,7 @@ for epoch in tqdm(range(n_epoch)):
         res['loss_mse'] = np.mean(loss_mse_his)
         res['loss_w_reg'] = np.mean(loss_w_reg_his)
         
-        res_ndcg = evaluate_Custom_Lasso(model, train_loader)
+        res_ndcg = evaluate_NDCG(model, train_loader)
         res.update(res_ndcg)
         results.append(res)
         
@@ -895,8 +883,81 @@ final_results.append(results_df[select_columns].iloc[-1])
 
 # ## Quality Check
 
-# In[35]:
+# In[108]:
 
+
+# select doc_id and k
+doc_id = 90
+topk = 30
+
+model
+
+
+# In[109]:
+
+
+import colored
+from colored import stylize
+
+word_list = dataset.vocab.itos
+
+gt = [word_list[word_idx] for word_idx in np.argsort(weight_ans[doc_id])[::-1][:topk]]
+pred = [word_list[word_idx] for word_idx in np.argsort(model.emb.cpu().weight.data[doc_id].numpy())[::-1][:topk]]
+
+print('ground truth')
+for word in gt:
+    if word in pred:
+        print(stylize(word, colored.bg("yellow")), end=' ')
+    else:
+        print(word, end=' ')
+
+print()
+print('\nprediction')
+for word in pred:
+    if word in gt:
+        print(stylize(word, colored.bg("yellow")), end=' ')
+    else:
+        print(word, end=' ')
+
+
+# In[110]:
+
+
+# raw document
+print()
+ps = PorterStemmer()
+    
+for word in dataset.documents[doc_id].split():
+    word_stem = ps.stem(word)
+    if word_stem in gt:
+        if word_stem in pred:
+            print(stylize(word, colored.bg("yellow")), end=' ')
+        else:
+            print(stylize(word, colored.bg("light_gray")), end=' ')
+    else:
+        print(word, end=' ')
+# print(dataset.documents[doc_id])
+
+
+# In[111]:
+
+
+results = {}
+   
+scores = np.array(model.emb.weight.data)[doc_id].reshape(1, -1)
+true_relevance = train_loader.dataset.weight_ans[doc_id].reshape(1, -1)
+
+results['ndcg@50'] = (ndcg_score(true_relevance, scores, k=50))
+results['ndcg@100'] = (ndcg_score(true_relevance, scores, k=100))
+results['ndcg@200'] = (ndcg_score(true_relevance, scores, k=200))
+results['ndcg@all'] = (ndcg_score(true_relevance, scores, k=None))
+
+print('This document ndcg:')
+print('ground truth length:', np.sum(weight_ans[doc_id] > 0))
+print('NDCG top50', results['ndcg@50'])
+print('NDCG top100', results['ndcg@100'])
+print('NDCG top200', results['ndcg@200'])
+print('NDCG ALL', results['ndcg@all'])
 
 
 # ## Final results
@@ -904,35 +965,29 @@ final_results.append(results_df[select_columns].iloc[-1])
 # In[39]:
 
 
-is_notebook = in_notebook()
-
-
-# In[40]:
-import time
-
 final_results_df = pd.DataFrame(final_results).reset_index(drop=True)
-t = time.localtime()
-t = time.strftime("%Y-%m-%d_%H:%M:%S", t)
 
-experiment_dir = './records/dataset-{}-n_document-{}-wdist-{}-filtertopk-{}-time-{}'.format(
+experiment_dir = './records/dataset-{}-n_document-{}-wdist-{}-filtertopk-{}'.format(
                                         config['dataset'],
                                         config['n_document'],
                                         config["document_vector_agg_weight"],
-                                        config["topk_word_freq_threshold"],
-                                        t)
+                                        config["topk_word_freq_threshold"])
 
 print('Saving to directory', experiment_dir)
 os.makedirs(experiment_dir, exist_ok=True)
 
 
-# In[41]:
+# In[40]:
+
+
 final_results_df.to_csv(os.path.join(experiment_dir, 'result.csv'), index=False)
 
 import json
 with open(os.path.join(experiment_dir, 'config.json'), 'w') as json_file:
-    json.dump(vars(args), json_file)
+    json.dump(config, json_file)
 
-# In[42]:
+
+# In[114]:
 
 
 for feat in final_results_df.set_index('model').columns:
@@ -952,8 +1007,14 @@ for feat in final_results_df.set_index('model').columns:
         plt.show()
 
 
-# In[43]:
+# In[42]:
 
 
 print(final_results_df)
-final_results_df
+
+
+# In[ ]:
+
+
+
+
