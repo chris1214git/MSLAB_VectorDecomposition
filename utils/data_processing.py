@@ -7,11 +7,12 @@ from collections import defaultdict
 from tqdm.auto import tqdm
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
-from sklearn.datasets import fetch_20newsgroups
 from nltk.collocations import BigramAssocMeasures, BigramCollocationFinder
 
 import torch
 from torch.nn.utils.rnn import pad_sequence
+
+from .data_loader import load_document, load_word2emb
 
 
 class Vocabulary:
@@ -31,6 +32,8 @@ class Vocabulary:
         self.word2embedding = word2embedding
         self.word_freq_in_corpus = defaultdict(int)
         self.stop_words = set(stopwords.words('english'))
+
+        self.build_vocabulary()
 
     def __len__(self):
         return len(self.itos)
@@ -76,7 +79,6 @@ class Vocabulary:
                 pair, score = pmi_score
                 self.word_weight[pair[0]] += score
                 self.word_weight[pair[1]] += score
-
 
     def document2index(self, dataset, max_seq_length=128):
         # Transform word to index.
@@ -159,7 +161,8 @@ class Vocabulary:
         document_weghts = []
 
         word_dim = len(self.stoi)
-        embedding_dim = len(self.word2embedding["the"])
+        embedding_dim = len(self.word2embedding.get(
+            "the", 0)) if self.word2embedding != None else 0
 
         print("Word dim:{}, glove embedding dim:{}".format(
             word_dim, embedding_dim))
@@ -187,60 +190,13 @@ class Vocabulary:
             for word in select_words:
                 document_tfidf[self.stoi[word]] += self.IDF[word]
                 if (self.word2embedding != None):
-                    document_weight += self.word2embedding(
-                        word) * self.word_weight[word]
+                    document_weight += self.word2embedding[word] * \
+                        self.word_weight[word]
 
             document_tfidfs.append(document_tfidf)
             document_weghts.append(document_weight)
 
         return document_tfidfs, document_weghts
-
-
-def load_document(dataset):
-    if dataset == "20news":
-        num_classes = 20
-        raw_text, target = fetch_20newsgroups(data_home="./", subset='all', categories=None,
-                                              shuffle=False, return_X_y=True)
-        documents = [doc.strip("\n") for doc in raw_text]
-    elif dataset == "IMDB":
-        target = []
-        documents = []
-        num_classes = 2
-
-        sub_dir = ["pos", "neg"]
-        dir_prefix = "./aclImdb/train/"
-        for target_type in sub_dir:
-            data_dir = os.path.join(dir_prefix, target_type)
-            files_name = os.listdir(data_dir)
-            for f_name in files_name:
-                with open(os.path.join(data_dir, f_name), "r") as f:
-                    context = f.readlines()
-                    documents.extend(context)
-
-            # assign label
-            label = 1 if target_type == "pos" else 0
-            label = [label] * len(files_name)
-            target.extend(label)
-    else:
-        raise NotImplementedError
-
-    return {"documents": documents, "target": target, "num_classes": num_classes}
-
-
-def load_word2emb(embedding_file):
-    word2embedding = dict()
-    word_dim = int(re.findall(r".(\d+)d", embedding_file)[0])
-
-    with open(embedding_file, "r") as f:
-        for line in tqdm(f):
-            line = line.strip().split()
-            word = line[0]
-            embedding = list(map(float, line[1:]))
-            word2embedding[word] = np.array(embedding)
-
-    print("Number of words:%d" % len(word2embedding))
-
-    return word2embedding
 
 
 def normalize_wordemb(word2embedding):
@@ -263,7 +219,7 @@ def normalize_wordemb(word2embedding):
     return word2embedding
 
 
-def get_process_data(dataset: str, embedding_type: str, word2embedding_path: str = '',
+def get_process_data(dataset: str, embedding_type: str = '', word2embedding_path: str = '',
                      embedding_dim: int = 128, min_word_freq_threshold: int = 5,
                      topk_word_freq_threshold: int = 100, max_seq_length: int = 128) -> dict:
     # Input contents:
@@ -272,7 +228,7 @@ def get_process_data(dataset: str, embedding_type: str, word2embedding_path: str
     # (3). word2embedding_path: Pretrain embedding model path, such as glove.6B.100d.txt.
     # Return contents:
     # (1). document_tfidf: Tfidf vectors for all documents, shape: [num_documents, vocab_size]
-    # (2). document_weight: Weighted glove embedding representation for all documents, shape: [num_]
+    # (2). document_weight: Weighted glove embedding representation for all documents, shape: [num_documents, glove_embedding_size]
     # (3). document_embedding: Embedding vecotrs create from pretrain encoder, shape: [num_documents, embedding_dim]
     # (4). dataset: raw data, target and num_classes which used to train downstream task.
     # (5). LSTM_data: Contrains seq_length, paded_context, target_tensor, used to train LSTM autoencoder.
@@ -282,19 +238,18 @@ def get_process_data(dataset: str, embedding_type: str, word2embedding_path: str
     # Prepare dataset.
     document_data = load_document(dataset)
 
-    if (word2embedding_path != ''):
+    if (word2embedding_path != '' and os.path.exists(word2embedding_path)):
+        print("Loading word2embedding from {}".format(word2embedding_path))
         word2embedding = normalize_wordemb(load_word2emb(word2embedding_path))
 
-    vocab = Vocabulary(document_data["documents"], word2embedding, min_word_freq_threshold=min_word_freq_threshold,
-                       topk_word_freq_threshold=topk_word_freq_threshold)
-
-    vocab.build_vocabulary()
+    vocab = Vocabulary(document_data["documents"], word2embedding=word2embedding,
+                       min_word_freq_threshold=min_word_freq_threshold, topk_word_freq_threshold=topk_word_freq_threshold)
 
     # prepare LSTM index input.
     index_data = vocab.document2index(document_data, max_seq_length)
 
     # Prepare document representations.
-    if (os.path.exists("document_tfidf.npy")):
+    if (os.path.exists("document_tfidf.npy") and os.path.exists("document_weight.npy")):
         document_tfidf = np.load("document_tfidf.npy", allow_pickle=True)
         document_weight = np.load(
             "document_weight.npy", allow_pickle=True)
@@ -307,10 +262,8 @@ def get_process_data(dataset: str, embedding_type: str, word2embedding_path: str
     if (embedding_type == "LSTM"):
         document_embedding = np.load(
             "docvec_20news_LSTM_{}d.npy".format(embedding_dim))
-    elif (embedding_type == None):
-        document_embedding = None
     else:
-        raise NotImplementedError
+        document_embedding = None
 
     return {"document_tfidf": document_tfidf, "document_weight": document_weight,
             "document_embedding": document_embedding, "dataset": document_data, "LSTM_data": index_data}
