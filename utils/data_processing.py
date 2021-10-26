@@ -51,27 +51,27 @@ class Vocabulary:
             self.stoi[token] for token in tokenized_text if token in self.stoi
         ]
 
-    def init_word_weight(self, sentence_list, agg):
-        if agg == 'mean':
+    def init_word_weight(self):
+        if self.agg == 'mean':
             self.word_weight = {word: 1 for word in self.IDF.keys()}
-        elif agg == 'IDF':
+        elif self.agg == 'IDF':
             self.word_weight = self.IDF
-        elif agg == 'uniform':
+        elif self.agg == 'uniform':
             self.word_weight = {word: np.random.uniform(
                 low=0.0, high=1.0) for word in self.IDF.keys()}
-        elif agg == 'gaussian':
+        elif self.agg == 'gaussian':
             mu, sigma = 10, 1  # mean and standard deviation
             self.word_weight = {word: np.random.normal(
                 mu, sigma) for word in self.IDF.keys()}
-        elif agg == 'exponential':
+        elif self.agg == 'exponential':
             self.word_weight = {word: np.random.exponential(
                 scale=1.0) for word in self.IDF.keys()}
-        elif agg == 'pmi':
+        elif self.agg == 'pmi':
             trigram_measures = BigramAssocMeasures()
             self.word_weight = defaultdict(int)
             corpus = []
 
-            for text in tqdm(sentence_list):
+            for text in tqdm(self.document_list):
                 corpus.extend(text.split())
 
             finder = BigramCollocationFinder.from_words(corpus)
@@ -186,7 +186,7 @@ class Vocabulary:
                 continue
 
             # aggregate doc vectors
-            self.init_word_weight(self.document_list, self.agg)
+            self.init_word_weight()
             for word in select_words:
                 document_tfidf[self.stoi[word]] += self.IDF[word]
                 if (self.word2embedding != None):
