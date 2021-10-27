@@ -157,6 +157,7 @@ class Vocabulary:
     def get_document_representation(self):
 
         # Calculate document representation (TFIDF and weighted embedding).
+        document_error = []
         document_tfidfs = []
         document_weghts = []
 
@@ -166,12 +167,9 @@ class Vocabulary:
 
         print("Word dim:{}, glove embedding dim:{}".format(
             word_dim, embedding_dim))
-        idx = -1
-        document_error = []
-        for sentence in tqdm(self.document_list, desc="Calculate document vectors..."):
+        for sen_id, sentence in enumerate(tqdm(self.document_list, desc="Calculate document vectors...")):
 
             # Prepare document representation for each document.
-            idx += 1
             select_words = []
             document_tfidf = np.zeros(word_dim)
             document_weight = np.zeros(embedding_dim)
@@ -184,7 +182,7 @@ class Vocabulary:
                     select_words.append(word)
 
             if len(select_words) == 0:
-                document_error.append(idx)
+                document_error.append(sen_id)
                 print('error', sentence)
                 continue
 
@@ -222,6 +220,17 @@ def normalize_wordemb(word2embedding):
     return word2embedding
 
 
+def del_error_documents(document_data, document_tfidf, document_weight, document_error):
+
+    for err_idx in sorted(document_error, reverse=True):
+        del document_data["documents"][err_idx]
+        del document_data["target"][err_idx]
+        del document_tfidf[err_idx]
+        del document_weight[err_idx]
+
+    return document_data, document_tfidf, document_weight
+
+
 def get_process_data(dataset: str, agg: str = 'IDF', embedding_type: str = '', word2embedding_path: str = '',
                      embedding_dim: int = 128, min_word_freq_threshold: int = 5,
                      topk_word_freq_threshold: int = 100, max_seq_length: int = 128) -> dict:
@@ -248,19 +257,19 @@ def get_process_data(dataset: str, agg: str = 'IDF', embedding_type: str = '', w
     vocab = Vocabulary(document_data["documents"], agg=agg, word2embedding=word2embedding,
                        min_word_freq_threshold=min_word_freq_threshold, topk_word_freq_threshold=topk_word_freq_threshold)
 
-    # prepare LSTM index input.
-    index_data = vocab.document2index(document_data, max_seq_length)
-
     # Prepare document representations.
     if (os.path.exists("document_tfidf.npy") and os.path.exists("document_weight.npy") and os.path.exists("document_error.npy")):
         document_tfidf = np.load("document_tfidf.npy", allow_pickle=True)
         document_weight = np.load("document_weight.npy", allow_pickle=True)
-        document_error = np.load("document_error.npy", allow_pickle=True)
     else:
-        document_tfidf, document_weight = vocab.get_document_representation()
+        document_tfidf, document_weight, document_error = vocab.get_document_representation()
+        document_data, document_tfidf, document_weight = del_error_documents(
+            document_data, document_tfidf, document_weight, document_error)
         np.save("document_tfidf.npy", document_tfidf)
         np.save("document_weight.npy", document_weight)
-        np.save("document_error.npy", document_error)
+
+    # prepare LSTM index input.
+    index_data = vocab.document2index(document_data, max_seq_length)
 
     # Prepare document embedding.
     if (embedding_type == "LSTM"):
@@ -269,5 +278,5 @@ def get_process_data(dataset: str, agg: str = 'IDF', embedding_type: str = '', w
     else:
         document_embedding = None
 
-    return {"document_tfidf": document_tfidf, "document_weight": document_weight, "document_error": document_error,
+    return {"document_tfidf": document_tfidf, "document_weight": document_weight,
             "document_embedding": document_embedding, "dataset": document_data, "LSTM_data": index_data}
