@@ -79,7 +79,7 @@ if __name__ == '__main__':
     # print(f"Setting seeds:{config['seed']}")
     same_seeds(config["seed"])
     data_dict = get_process_data(
-        config["dataset"], embedding_dim=config["dim"], max_seq_length=config["max_seq_length"])
+        config["dataset"], max_seq_length=config["max_seq_length"])
 
     # prepare pytorch input
     # tokenize_data = sorted(tokenize_data, key = lambda x: len(x), reverse = True)

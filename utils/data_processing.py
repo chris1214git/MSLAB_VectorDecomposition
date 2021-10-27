@@ -219,7 +219,7 @@ def normalize_wordemb(word2embedding):
     return word2embedding
 
 
-def get_process_data(dataset: str, embedding_type: str = '', word2embedding_path: str = '',
+def get_process_data(dataset: str, agg: str = 'IDF', embedding_type: str = '', word2embedding_path: str = '',
                      embedding_dim: int = 128, min_word_freq_threshold: int = 5,
                      topk_word_freq_threshold: int = 100, max_seq_length: int = 128) -> dict:
     # Input contents:
@@ -242,7 +242,7 @@ def get_process_data(dataset: str, embedding_type: str = '', word2embedding_path
         print("Loading word2embedding from {}".format(word2embedding_path))
         word2embedding = normalize_wordemb(load_word2emb(word2embedding_path))
 
-    vocab = Vocabulary(document_data["documents"], word2embedding=word2embedding,
+    vocab = Vocabulary(document_data["documents"], agg=agg, word2embedding=word2embedding,
                        min_word_freq_threshold=min_word_freq_threshold, topk_word_freq_threshold=topk_word_freq_threshold)
 
     # prepare LSTM index input.
