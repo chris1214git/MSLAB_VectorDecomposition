@@ -12,13 +12,13 @@ def ListNet(y_pred, y_true, eps=1e-10):
     y_pred = y_pred.clone()
     y_true = y_true.clone()
 
-    pred_smax = torch.nn.functional.softmax(y_pred, dim=1)
-    true_smax = torch.nn.functional.softmax(y_true, dim=1)
+    # pred_smax = torch.nn.functional.softmax(y_pred, dim=1)
+    # true_smax = torch.nn.functional.softmax(y_true, dim=1)
 
-    pred = pred_smax + eps
+    pred = y_pred + eps
     pred_log = torch.log(pred)
 
-    return torch.mean(torch.sum(-true_smax * pred_log, dim=1))
+    return torch.mean(torch.sum(-y_true * pred_log, dim=1))
 
 def topk_ListNet(y_pred, y_true, y_rank, eps=1e-10, topk=64):
     # (1) y_pred: the decoded vector. 
@@ -35,16 +35,13 @@ def topk_ListNet(y_pred, y_true, y_rank, eps=1e-10, topk=64):
     y_true = y_true.clone()
     y_rank = y_rank.clone()
 
-    pred_smax = torch.nn.functional.softmax(y_pred, dim=1)
-    true_smax = torch.nn.functional.softmax(y_true, dim=1)
-    
-    pred_smax = torch.gather(pred_smax, 1, y_rank[:, :topk])
-    true_smax = torch.gather(true_smax, 1, y_rank[:, :topk])
+    y_pred = torch.gather(y_pred, 1, y_rank[:, :topk])
+    y_true = torch.gather(y_true, 1, y_rank[:, :topk])
   
   
-    pred = pred_smax + eps
-    preds_log = torch.log(pred)
-    return torch.mean(torch.sum(-true_smax * preds_log, dim=1))
+    preds_smax = y_pred + eps
+    preds_log = torch.log(preds_smax)
+    return torch.mean(torch.sum(-y_true * preds_log, dim=1))
 
 def RankLoss(y_pred, y_true):
     # (1) y_pred: the decoded vector. 
