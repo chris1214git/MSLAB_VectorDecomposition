@@ -128,7 +128,7 @@ def evaluate_sklearn(pred, ans):
 
 main_path = './'
 parser = argparse.ArgumentParser()
-parser.add_argument('--mode', type=str, default='train_autoencoder')
+parser.add_argument('--mode', type=str, default='train_AE')
 parser.add_argument('--type', type=str, default='50')
 arg = parser.parse_args()
 
