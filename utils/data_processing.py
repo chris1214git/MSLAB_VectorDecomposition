@@ -258,7 +258,7 @@ def get_process_data(dataset: str, agg: str = 'IDF', embedding_type: str = '', w
                        min_word_freq_threshold=min_word_freq_threshold, topk_word_freq_threshold=topk_word_freq_threshold)
 
     # Prepare document representations.
-    if (os.path.exists("document_tfidf.npy") and os.path.exists("document_weight.npy") and os.path.exists("document_error.npy")):
+    if (os.path.exists("document_tfidf.npy") and os.path.exists("document_weight.npy")):
         document_tfidf = np.load("document_tfidf.npy", allow_pickle=True)
         document_weight = np.load("document_weight.npy", allow_pickle=True)
     else:
