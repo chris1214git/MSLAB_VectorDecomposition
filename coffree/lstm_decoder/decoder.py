@@ -1,32 +1,39 @@
-import os
-import argparse
-import numpy as np
-from tqdm.auto import tqdm
-
-import torch
-import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
-
-from model import Decoder
-
-import matplotlib.pyplot as plt
 import matplotlib
+from model import Decoder
+from torch.utils.data import Dataset, DataLoader
+import torch.nn as nn
+import torch
+from torch.utils.data import random_split
+from tqdm.auto import tqdm
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+import sys
+import argparse
+
+sys.path.append("../..")
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
+from utils.data_processing import get_process_data
+
 matplotlib.use('Agg')
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 class DocDataset(Dataset):
     def __init__(self, doc_embedding, doc_tfidf):
+        self.doc_tfidf_s = []
         self.vocab_size = len(doc_tfidf[0])
         self.doc_embedding = torch.FloatTensor(doc_embedding)
-        self.doc_tfidf = doc_tfidf
-        self.doc_tfidf_s = [sorted(range(self.vocab_size), key=lambda k: self.doc_tfidf[idx]
-                                   [k], reverse=True) for idx in range(len(doc_tfidf))]
-        for idx in range(len(self.doc_tfidf_s)):
-            # Compare all word in a document.
-            self.doc_tfidf_s[idx][self.doc_tfidf_s[idx].index(0) + 1] = -1
+        for idx in range(len(doc_tfidf)):
+            self.doc_tfidf_s.append(
+                sorted(range(self.vocab_size), key=lambda k: doc_tfidf[idx][k], reverse=True))
+            self.doc_tfidf_s[idx][50] = -1
+            # nonzero = 0
+            # for value in doc_tfidf[idx]:
+            #     if (value > 0):
+            #         nonzero += 1
+            # self.doc_tfidf_s[idx][nonzero + 1] = -1
         self.doc_tfidf_s = torch.tensor(self.doc_tfidf_s)
-        assert len(doc_embedding) == len(doc_tfidf)
 
     def __getitem__(self, idx):
         return self.doc_embedding[idx], self.doc_tfidf_s[idx]
@@ -35,8 +42,6 @@ class DocDataset(Dataset):
         return len(self.doc_embedding)
 
 # fix random seed
-
-
 def same_seeds(seed):
     torch.manual_seed(seed)
     if torch.cuda.is_available():
@@ -47,39 +52,33 @@ def same_seeds(seed):
     torch.backends.cudnn.deterministic = True
 
 
-def load_data(embedding_dim):
-    document_embedding = np.load(
-        f"../../data/docvec_20news_LSTM_{embedding_dim}d.npy")
-    document_tfidf = np.load("document_vectors.npy")
-
-    return document_embedding, document_tfidf
-
-
 def training(doc_embedding, doc_tfidf):
     lr = 0.001
     epochs = 100
     batch_size = 64
     vocab_size = len(doc_tfidf[0])
-    embedding_size = len(doc_embedding[0])
+    embedding_dim = len(doc_embedding[0])
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print("Vocab size:{}, embedding_dim:{}".format(vocab_size, embedding_size))
+    print("Vocab size:{}, embedding_dim:{}".format(vocab_size, embedding_dim))
 
     # Preparing training and validation data.
     train_size_ratio = 0.8
     train_size = int(len(doc_embedding) * train_size_ratio)
+    test_size = len(doc_embedding) - train_size
 
-    train_dataset = DocDataset(
-        doc_embedding[:train_size], doc_tfidf[:train_size])
+    dataset = DocDataset(doc_embedding, doc_tfidf)
+
+    train_dataset, test_dataset = random_split(dataset, lengths=[train_size, test_size],
+                                               generator=torch.Generator().manual_seed(42))
+
     train_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
 
-    test_dataset = DocDataset(
-        doc_embedding[train_size:], doc_tfidf[train_size:])
     test_loader = DataLoader(
         test_dataset, batch_size=batch_size, shuffle=False, pin_memory=True)
 
     model = Decoder(vocab_size=vocab_size,
-                    embedding_dim=embedding_size).to(device)
+                    embedding_dim=embedding_dim).to(device)
 
     loss_function = nn.MultiLabelMarginLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -103,7 +102,8 @@ def training(doc_embedding, doc_tfidf):
             train_loss += loss.item()
 
         log_train_loss.append(train_loss / len(train_loader))
-        print('[{}/{}] Train Loss:'.format(epoch+1, epochs), train_loss / len(train_loader))
+        print('[{}/{}] Train Loss:'.format(epoch+1, epochs),
+              train_loss / len(train_loader))
 
         # Evaluate
         model.eval()
@@ -118,11 +118,12 @@ def training(doc_embedding, doc_tfidf):
             val_loss += loss.item()
 
         log_val_loss.append(val_loss / len(test_loader))
-        print('[{}/{}] Validation Loss:'.format(epoch+1, epochs), val_loss / len(test_loader))
+        print('[{}/{}] Validation Loss:'.format(epoch +
+              1, epochs), val_loss / len(test_loader))
 
         if (epoch + 1) % 10 == 0:
             torch.save(model.state_dict(),
-                       "MultiLayer_LSTM_{}d_{}-epoch_decoder.pth".format(embedding_size, epoch+1))
+                       "LSTM_{}d_{}-epoch_decoder.pth".format(embedding_dim, epoch+1))
 
     plt.plot(log_train_loss)
     plt.plot(log_val_loss)
@@ -131,16 +132,22 @@ def training(doc_embedding, doc_tfidf):
 
 def main():
     parser = argparse.ArgumentParser(description='document decomposition.')
-    parser.add_argument('--dataset', type=str, default="20news")
     parser.add_argument('--seed', type=int, default=123)
-    parser.add_argument('--dim', type=int, default=128)
+    parser.add_argument('--dataset', type=str, default="20news")
+    parser.add_argument('--embedding_dim', type=int, default=128)
+    parser.add_argument('--embedding_type', type=str, default="LSTM")
+    parser.add_argument('--min_word_freq_threshold', type=int, default=5)
+    parser.add_argument('--topk_word_freq_threshold', type=int, default=100)
 
     args = parser.parse_args()
     config = vars(args)
 
     same_seeds(config["seed"])
 
-    doc_embedding, doc_tfidf = load_data(config['dim'])
+    data_dict = get_process_data(config["dataset"], embedding_type=config["embedding_type"],
+                                 embedding_dim=config["embedding_dim"])
+
+    doc_embedding, doc_tfidf = data_dict["document_embedding"], data_dict["document_tfidf"]
 
     print(np.array(doc_embedding).shape)
     print(np.array(doc_tfidf).shape)
