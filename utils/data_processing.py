@@ -275,6 +275,8 @@ def get_process_data(dataset: str, agg: str = 'IDF', embedding_type: str = '', w
     if (embedding_type == "LSTM"):
         document_embedding = np.load(
             "docvec_20news_LSTM_{}d.npy".format(embedding_dim))
+    elif (embedding_type == "BERT"):
+        document_embedding = np.load("docvec_20news_BertMLM.npy")
     else:
         document_embedding = None
 

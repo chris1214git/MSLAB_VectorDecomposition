@@ -172,7 +172,7 @@ if __name__ == '__main__':
 
     document_vectors = generate_document_vector(model, full_loader)
     print("Saving document vectors")
-    np.save(f"docvec_20news_BertLM.npy", document_vectors)
+    np.save(f"docvec_20news_BertMLM.npy", document_vectors)
 
     valid_acc = evaluate_downstream(document_vectors, targets, train_data, test_data)
     print(f"Validation accuracy:{valid_acc:.4f}")
