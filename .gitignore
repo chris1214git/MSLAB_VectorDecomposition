@@ -1,5 +1,6 @@
 data/IMDB.txt
 data/glove*
+data/LIDE_wordemb
 data/docvector.txt
 data/wiki*
 .ipynb_checkpoints/
