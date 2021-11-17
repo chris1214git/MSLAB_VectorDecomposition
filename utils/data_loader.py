@@ -28,6 +28,7 @@ def load_document(dataset):
         raw_text, target = fetch_20newsgroups(data_home="./", subset='all', categories=None,
                                               shuffle=False, return_X_y=True)
         documents = [doc.strip("\n") for doc in raw_text]
+        target = list(target)
     elif dataset == "IMDB":
         target = []
         documents = []

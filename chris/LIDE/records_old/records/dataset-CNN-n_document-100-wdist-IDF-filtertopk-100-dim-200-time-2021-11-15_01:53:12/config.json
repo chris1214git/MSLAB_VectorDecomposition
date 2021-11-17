@@ -1,0 +1,1 @@
+{"dataset": "CNN", "n_document": 100, "normalize_word_embedding": false, "min_word_freq_threshold": 20, "topk_word_freq_threshold": 100, "document_vector_agg_weight": "IDF", "document_vector_weight_normalize": true, "select_topk_TFIDF": null, "embedding_file": "../data/glove.6B.100d.txt", "topk": [30, 40, 50, 60, 70]}
