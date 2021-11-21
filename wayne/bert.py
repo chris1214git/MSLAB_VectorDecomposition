@@ -312,7 +312,7 @@ def train_encoder(config, data_loader, targets):
             print('-------------------------------')
         print("[{}/{}] Training Loss: {}".format(epoch+1, config['epochs'], train_loss/len(data_loader)))
 
-    return encoder, decoder
+    return encoder
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='document decomposition.')
     parser.add_argument('--dataset', type=str, default="20news")
