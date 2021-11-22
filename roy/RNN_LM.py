@@ -119,6 +119,7 @@ if __name__ == '__main__':
     parser.add_argument('--max_seq_length', type=int, default=64)
     parser.add_argument('--word2embedding_path', type=str,
                         default="glove.6B.100d.txt")
+    parser.add_argument('--gpu', type=int, default=0)
 
     args = parser.parse_args()
     config = vars(args)
@@ -151,7 +152,8 @@ if __name__ == '__main__':
         valid_dataset, batch_size=128, shuffle=False, pin_memory=True)
 
     # training
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    torch.cuda.set_device(config['gpu'])
     vocab_size = len(data_dict["document_word_weight"][0])
 
     model = LSTM(vocab_size, config["dim"], vocab_size, 0.5).to(device)
@@ -160,7 +162,7 @@ if __name__ == '__main__':
     loss_function = nn.CrossEntropyLoss(ignore_index=0)
     best_loss = 9999999
 
-    for epoch in range(300):
+    for epoch in range(1000):
         accuracy = []
         running_loss = []
         model.train()
@@ -187,7 +189,7 @@ if __name__ == '__main__':
                 model.state_dict(),
                 "RNN-LM.pt"
             )
-        if (epoch+1) % 50 ==0:
+        if (epoch+1) % 20 ==0:
             valid_acc = eval_downstream(model,device)
             print(f"Validation accuracy:{valid_acc:.4f}")
 

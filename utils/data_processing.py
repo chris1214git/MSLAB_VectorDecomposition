@@ -226,8 +226,8 @@ def normalize_wordemb(word2embedding):
 def del_error_documents(document_data, document_word_weight, document_embedding, document_error):
     print('delete items', len(document_error))
     for err_idx in sorted(document_error, reverse=True):
-        print('error', document_data["documents"][err_idx]) 
-        print('target', document_data["target"][err_idx])
+        # print('error', document_data["documents"][err_idx]) 
+        # print('target', document_data["target"][err_idx])
         del document_data["documents"][err_idx]
         del document_data["target"][err_idx]
         del document_word_weight[err_idx]
@@ -287,10 +287,13 @@ def get_process_data(dataset: str, agg: str = 'IDF', embedding_type: str = '',
         document_data, document_word_weight, document_embedding, document_error)
 
     index_data = None
+    document_embedding = None
     # Prepare document embedding.
     if (embedding_type == "LSTM"):
-        document_embedding = np.load(
-            "docvec_20news_LSTM_{}d.npy".format(embedding_dim))
+        if os.path.exists("../data/docvec_20news_LSTM_{}d.npy"):
+            document_embedding = np.load(
+                "../data/docvec_20news_LSTM_{}d.npy".format(embedding_dim)
+                )
         # prepare LSTM index input.
         index_data = vocab.document2index(document_data, max_seq_length)
     elif (embedding_type == "BERT"):

@@ -1,17 +1,19 @@
-from tqdm.auto import tqdm
-from torch.utils.data import DataLoader, TensorDataset, random_split
-from torch.nn.utils.rnn import pack_padded_sequence
+import argparse
+import sys
+
 import numpy as np
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch
-import sys
-import argparse
 from sklearn.linear_model import LogisticRegression
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+from torch.utils.data import DataLoader, Dataset, TensorDataset, random_split
+from tqdm.auto import tqdm
 
 sys.path.append("../")
 
 from utils.data_processing import get_process_data
+from utils.Loss import ListNet
 
 # fix random seed
 
@@ -30,17 +32,27 @@ class LSTM(nn.Module):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, hidden_dim, padding_idx=0)
         self.lstm = nn.LSTM(hidden_dim, hidden_dim, batch_first=True)
-        self.fc = nn.Linear(hidden_dim, output_dim)
         self.dropout = nn.Dropout(dropout_rate)
+        self.fc = nn.Linear(hidden_dim, output_dim)
+        self.decoder = nn.Sequential(
+            # nn.Linear(hidden_dim, 1024),
+            # nn.Tanh(),
+            # nn.Linear(1024, 4096),
+            # nn.Tanh(),
+            nn.Linear(hidden_dim, output_dim),
+            nn.Sigmoid(),
+        )
 
     def forward(self, ids, length):
         embedded = self.dropout(self.embedding(ids))
         
-        # embedded = pack_padded_sequence(embedded, length, batch_first=True,
-        #                                        enforce_sorted=False)
-        out, (hidden, cell) = self.lstm(embedded)
+        embedded = pack_padded_sequence(embedded, length, batch_first=True,
+                                               enforce_sorted=False)
+        packed_output, (hidden, ct) = self.lstm(embedded)
+        out, _ = pad_packed_sequence(packed_output,batch_first=True)
         batch_size, seq_size, hidden_size = out.shape
 
+        # for LM output
         # Reshape output to (batch_size*sequence_length, hidden_size)
         out = out.contiguous().view(batch_size * seq_size, hidden_size)
 
@@ -48,7 +60,12 @@ class LSTM(nn.Module):
         out = self.fc(self.dropout(out))
         out_feat = out.shape[-1]
         out = out.view(batch_size, seq_size, out_feat)
-        return out
+
+        # for TF-IDF decoder
+        doc_vec = hidden[-1]
+        decoded_output = self.decoder(doc_vec)
+
+        return decoded_output, out
 
     def get_docvec(self, ids, length):
         embedded = self.dropout(self.embedding(ids))
@@ -87,7 +104,7 @@ def eval_downstream(model,device):
     model.eval()
     document_vectors = []
     target = data_dict["LSTM_data"]["target_tensor"].numpy()
-    for word, length in tqdm(full_loader):
+    for word, length,_ in tqdm(full_loader):
         word = word.to(device)
         with torch.no_grad():
             vec = model.get_docvec(word, length)
@@ -108,6 +125,21 @@ def eval_downstream(model,device):
     
     return valid_acc
 
+class BertDataset(Dataset):
+
+    def __init__(self, paded_context, seq_length, labels) -> None:
+        super().__init__()
+        self.paded_context = paded_context
+        self.seq_length = seq_length
+        self.labels = torch.tensor(labels)
+        assert len(paded_context) == len(seq_length) and len(paded_context) == len(labels)
+
+    def __len__(self):
+        return len(self.paded_context)
+
+    def __getitem__(self, idx):
+        return self.paded_context[idx], self.seq_length[idx], self.labels[idx]
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='document decomposition.')
@@ -119,6 +151,7 @@ if __name__ == '__main__':
     parser.add_argument('--max_seq_length', type=int, default=64)
     parser.add_argument('--word2embedding_path', type=str,
                         default="glove.6B.100d.txt")
+    parser.add_argument('--gpu', type=int, default=0)
 
     args = parser.parse_args()
     config = vars(args)
@@ -136,9 +169,12 @@ if __name__ == '__main__':
     # tokenize_data = sorted(tokenize_data, key = lambda x: len(x), reverse = True)
     seq_length = data_dict["LSTM_data"]["seq_length"]
     paded_context = data_dict["LSTM_data"]["paded_context"]
+    raw_data = data_dict["dataset"]
+    documents, targets, target_num = raw_data["documents"], raw_data["target"], raw_data["num_classes"]
+    labels = data_dict["document_word_weight"]
 
     # dataset
-    dataset = TensorDataset(paded_context, seq_length)
+    dataset = BertDataset(paded_context, seq_length, labels)
     train_length = int(len(dataset)*0.8)
     valid_length = len(dataset) - train_length
 
@@ -151,56 +187,63 @@ if __name__ == '__main__':
         valid_dataset, batch_size=128, shuffle=False, pin_memory=True)
 
     # training
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    torch.cuda.set_device(config['gpu'])
     vocab_size = len(data_dict["document_word_weight"][0])
 
     model = LSTM(vocab_size, config["dim"], vocab_size, 0.5).to(device)
-    # model.load_state_dict(torch.load("RNN-LM.pt"))
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     loss_function = nn.CrossEntropyLoss(ignore_index=0)
     best_loss = 9999999
 
-    for epoch in range(300):
-        accuracy = []
+    for epoch in range(500):
         running_loss = []
+        running_lmloss = []
+        running_listnetloss = []
+        listnet_weight = 1 if epoch > 0 else 0
         model.train()
-        for word, length in tqdm(train_loader):
-            word = word.to(device)
-
-            logits = model(word, length)
+        for batch in tqdm(train_loader):
+            batch = [i.to(device) for i in batch]
+            word, length, label = batch
+            length = length.cpu()
+            decoded_output, logits = model(word, length)
+            listnet_loss = ListNet(decoded_output, label)
             logits = logits[:,:-1,:].reshape(-1, vocab_size)
             target = word[:,1:].reshape(-1)
-            loss = sequence_loss(logits, target)
+            lm_loss = sequence_loss(logits, target)
+            loss = listnet_weight * listnet_loss + lm_loss
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
             
-            acc_t = compute_accuracy(logits, target)
-            accuracy.append(acc_t)
             running_loss.append(loss.item())
+            running_listnetloss.append(listnet_loss.item())
+            running_lmloss.append(lm_loss.item())
         
         avg_loss = np.mean(running_loss)
-        print(f"[Epoch {epoch:02d}] Train Accuracy:{np.mean(accuracy):.4f} Train Loss:{avg_loss:.4f}")
+        avgLM_loss = np.mean(running_lmloss)
+        avgListnet_loss = np.mean(running_listnetloss)
+        print(f"[Epoch {epoch:02d}]  Train Loss:{avg_loss:.4f} LM-Loss:{avgLM_loss:.4f} Listnet-Loss:{avgListnet_loss:.4f}")
         if avg_loss < best_loss:
             best_loss = avg_loss
             torch.save(
                 model.state_dict(),
-                "RNN-LM.pt"
+                "RNN-TFIDF.pt"
             )
-        if (epoch+1) % 50 ==0:
+        if (epoch+1) % 20 ==0:
             valid_acc = eval_downstream(model,device)
             print(f"Validation accuracy:{valid_acc:.4f}")
 
 
-model.eval()
-valid_acc = eval_downstream(model,device)
-print(f"Validation accuracy:{valid_acc:.4f}")
-document_vectors = []
-for word, length in tqdm(full_loader):
-    word = word.to(device)
-    with torch.no_grad():
-        vec = model.get_docvec(word, length)
-    document_vectors.append(vec)
-document_vectors = torch.cat(document_vectors,dim=0).detach().cpu().numpy()
-print("Saving document vectors")
-np.save(f"docvec_20news_LstmLM_{config['dim']}d.npy", document_vectors)
+# model.eval()
+# valid_acc = eval_downstream(model,device)
+# print(f"Validation accuracy:{valid_acc:.4f}")
+# document_vectors = []
+# for word, length in tqdm(full_loader):
+#     word = word.to(device)
+#     with torch.no_grad():
+#         vec = model.get_docvec(word, length)
+#     document_vectors.append(vec)
+# document_vectors = torch.cat(document_vectors,dim=0).detach().cpu().numpy()
+# print("Saving document vectors")
+# np.save(f"docvec_20news_LstmLM_{config['dim']}d.npy", document_vectors)
