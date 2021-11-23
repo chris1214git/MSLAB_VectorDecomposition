@@ -15,7 +15,7 @@ from torch.utils.data.dataset import random_split
 
 from transformers import BertTokenizer, BertForMaskedLM
 from sklearn.linear_model import LogisticRegression
-from utils.data_loader import load_document
+from utils.data_processing import get_process_data
 
 class BertDataset(Dataset):
 
@@ -148,7 +148,8 @@ if __name__ == '__main__':
     same_seeds(config["seed"])
 
     # Prepare dataset.
-    dataset = load_document(config["dataset"])
+    data_dict = get_process_data(config["dataset"])
+    dataset = data_dict["dataset"]
     documents, targets, target_num = dataset["documents"], dataset["target"], dataset["num_classes"]
 
     train_ratio = 0.8
@@ -172,7 +173,7 @@ if __name__ == '__main__':
 
     document_vectors = generate_document_vector(model, full_loader)
     print("Saving document vectors")
-    np.save(f"docvec_20news_BertMLM.npy", document_vectors)
+    np.save("docvec_{}_BertMLM.npy".format(config["dataset"]), document_vectors)
 
     valid_acc = evaluate_downstream(document_vectors, targets, train_data, test_data)
     print(f"Validation accuracy:{valid_acc:.4f}")

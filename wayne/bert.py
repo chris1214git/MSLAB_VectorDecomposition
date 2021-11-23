@@ -14,7 +14,7 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataset import random_split
 from sklearn.metrics import ndcg_score
 
-from transformers import BertTokenizer, BertForMaskedLM, RobertaTokenizer, RobertaForMaskedLM, AlbertTokenizer, AlbertForMaskedLM
+from transformers import AdamW, get_linear_schedule_with_warmup, BertTokenizer, BertForMaskedLM, RobertaTokenizer, RobertaForMaskedLM, AlbertTokenizer, AlbertForMaskedLM
 from sklearn.linear_model import LogisticRegression
 from utils.Loss import ListNet
 from utils.data_processing import get_process_data
@@ -135,6 +135,14 @@ class BertFamily(nn.Module):
         
         return inputs
 
+    def mlm_pretrain(self, documents):
+
+        inputs = self.generate_mask_input(documents).to(self.device)
+
+        outputs = self.model(**inputs)
+
+        return outputs.loss
+
     def get_docvec(self, documents):
         inputs = self.tokenizer(documents, return_tensors='pt', padding=True,
                                 truncation=True, max_length=128).to(self.device)
@@ -176,11 +184,18 @@ def train_model(config, data_loader, training_set, validation_set, output_dim, t
 
     encoder = BertFamily(config['member'], device)
     decoder = Decoder(embedding_dim, output_dim).to(device)
-    optimizer_en = torch.optim.Adam(encoder.parameters(), lr=config['lr'])
-    optimizer_de = torch.optim.Adam(decoder.parameters(), lr=config['lr'])
+    if config['scheduler'] == 'required':
+        total_steps = len(train_loader) * config['epochs']
+        optimizer_en = AdamW(encoder.parameters(), lr=config['lr'], eps=1e-8)
+        optimizer_de = AdamW(decoder.parameters(), lr=config['lr'], eps=1e-8)
+        scheduler_en = get_linear_schedule_with_warmup(optimizer_en, num_warmup_steps=0, num_training_steps=total_steps)
+        scheduler_de = get_linear_schedule_with_warmup(optimizer_de, num_warmup_steps=0, num_training_steps=total_steps)
+    else:
+        optimizer_en = torch.optim.Adam(encoder.parameters(), lr=config['lr'])
+        optimizer_de = torch.optim.Adam(decoder.parameters(), lr=config['lr'])
 
     print('-------- Info ---------')
-    print('Bert Family: {}\nDataset: {}\nEpochs: {}\nBatch Size: {}\nLearning Rate: {}\nDevice: {}\nDevice Num: {}'.format(config['member'], config['dataset'], config['epochs'], config['batch_size'], config['lr'], device, config['gpu']))
+    print('Bert Family: {}\nDataset: {}\nEpochs: {}\nBatch Size: {}\nLearning Rate: {}\nScheduler: {}\nMaskLM pretrain: {}\nDevice: {}\nDevice Num: {}'.format(config['member'], config['dataset'], config['epochs'], config['batch_size'], config['lr'], config['scheduler'], config['mlm_pretrain'], device, config['gpu']))
     print('-----------------------')
 
     for epoch in range(config['epochs']):
@@ -193,15 +208,18 @@ def train_model(config, data_loader, training_set, validation_set, output_dim, t
             label = torch.nn.functional.normalize(label.to(device), dim=1)
             decoded = torch.nn.functional.normalize(decoder(embedding), dim=1)
             decode_loss = ListNet(decoded, label)
-            if (config["mlm_pretrain"] == "True"):
-                continue
-                #loss = decode_loss + mlm_loss
+            if config["mlm_pretrain"] == "True":
+                mlm_loss = encoder.mlm_pretrain(doc)
+                loss = decode_loss + mlm_loss
             else:
                 loss = decode_loss
             
             loss.backward()
             optimizer_en.step()
             optimizer_de.step()
+            if config['scheduler'] == 'required':
+                scheduler_en.step()
+                scheduler_de.step()
             optimizer_en.zero_grad()
             optimizer_de.zero_grad()
 
@@ -217,9 +235,9 @@ def train_model(config, data_loader, training_set, validation_set, output_dim, t
                 label = torch.nn.functional.normalize(label.to(device), dim=1)
                 decoded = torch.nn.functional.normalize(decoder(embedding), dim=1)
                 decode_loss = ListNet(decoded, label)
-                if (config["mlm_pretrain"] == "True"):
-                    continue
-                    #loss = decode_loss + mlm_loss
+                if config["mlm_pretrain"] == "True":
+                    mlm_loss = encoder.mlm_pretrain(doc)
+                    loss = decode_loss + mlm_loss
                 else:
                     loss = decode_loss
                 val_loss += loss.item()
@@ -233,7 +251,7 @@ def train_model(config, data_loader, training_set, validation_set, output_dim, t
         if (epoch + 1) % 10 == 0:
             doc_emb = generate_document_embedding(encoder, data_loader)
             val_acc = evaluate_downstream(doc_emb, targets, training_set, validation_set) 
-            record = open('./'+config['member']+'.txt', 'a')
+            record = open('./'+config['member']+'_mlm'+config['mlm_pretrain']+'_sheduler'+config['scheduler']+'.txt', 'a')
             results_m = pd.DataFrame(results).mean()
             record.write('------'+str(epoch)+'------')
             record.write(str(results_m))
@@ -247,18 +265,65 @@ def train_model(config, data_loader, training_set, validation_set, output_dim, t
         print("[{}/{}] Training Loss: {} / Validation Loss: {}".format(epoch +
               1, config['epochs'], train_loss/len(train_loader), val_loss/len(validation_loader)))
 
-    return model
+    return encoder, decoder
 
+def train_encoder(config, data_loader, targets):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    torch.cuda.set_device(config['gpu'])
+
+    encoder = BertFamily(config['member'], device)
+    if config['scheduler'] == 'required':
+        total_steps = len(data_loader) * config['epochs']
+        optimizer_en = AdamW(encoder.parameters(), lr=config['lr'], eps=1e-8)
+        scheduler_en = get_linear_schedule_with_warmup(optimizer_en, num_warmup_steps=0, num_training_steps=total_steps)
+    else:
+        optimizer_en = torch.optim.Adam(encoder.parameters(), lr=config['lr'])
+
+    print('-------- Info ---------')
+    print('Bert Family: {}\nDataset: {}\nEpochs: {}\nBatch Size: {}\nLearning Rate: {}\nScheduler: {}\nMaskLM pretrain: {}\nDevice: {}\nDevice Num: {}'.format(config['member'], config['dataset'], config['epochs'], config['batch_size'], config['lr'], config['scheduler'], config['mlm_pretrain'], device, config['gpu']))
+    print('-----------------------')
+
+    for epoch in range(config['epochs']):
+        # Training
+        encoder.train()
+        train_loss = 0
+        for idx, (doc, target, label, rank) in enumerate(tqdm(data_loader, desc="Training")):
+            mlm_loss = encoder.mlm_pretrain(doc)
+            loss = mlm_loss
+
+            loss.backward()
+            optimizer_en.step()
+            if config['scheduler'] == 'required':
+                scheduler_en.step()
+            optimizer_en.zero_grad()
+
+            train_loss += loss.item()
+        # F1 Score & NDCG & Downstream ACC
+        if (epoch + 1) % 10 == 0:
+            doc_emb = generate_document_embedding(encoder, data_loader)
+            val_acc = evaluate_downstream(doc_emb, targets, training_set, validation_set) 
+            record = open('./'+config['member']+'_mlm'+config['mlm_pretrain']+'_sheduler'+config['scheduler']+'.txt', 'a')
+            record.write('------'+str(epoch)+'------')
+            record.write('ACC: '+str(val_acc))
+            record.write('-------------------------------')
+            record.close()
+            print('------'+str(epoch)+'------')
+            print('ACC: '+str(val_acc))
+            print('-------------------------------')
+        print("[{}/{}] Training Loss: {}".format(epoch+1, config['epochs'], train_loss/len(data_loader)))
+
+    return encoder
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='document decomposition.')
     parser.add_argument('--dataset', type=str, default="20news")
     parser.add_argument('--label', type=str, default="tfidf")
-    parser.add_argument('--member', type=str, default='bert')
-    parser.add_argument('--mlm_pretrain', type=str, default="True")
+    parser.add_argument('--member', type=str, default='bert')       # (1) bert (2) roberta (3) albert
+    parser.add_argument('--mlm_pretrain', type=str, default="True") # (1) True: ListNet + MLM (2) False: ListNet (3) Only: MLM
     parser.add_argument('--gpu', type=int, default=0)
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--epochs', type=int, default=200)
     parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--scheduler', type=str, default='False')
     parser.add_argument('--seed', type=int, default=123)   
     parser.add_argument('--topk', type=int, nargs='+', default=[10, 30, 50])
     args = parser.parse_args()
@@ -288,5 +353,8 @@ if __name__ == '__main__':
     data_loader = DataLoader(dataset,  batch_size=config['batch_size'], shuffle=False, pin_memory=True)
     training_set, validation_set = random_split(dataset, lengths=[train_size, doc_num-train_size], generator=torch.Generator().manual_seed(42))
     
-    model = train_model(config, data_loader, training_set, validation_set, vocab_size, targets)
+    if config['mlm_pretrain'] == 'Only':
+        encoder = train_encoder(config, data_loader, targets)
+    else:
+        encoder, decoder = train_model(config, data_loader, training_set, validation_set, vocab_size, targets)
 

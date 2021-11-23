@@ -2,12 +2,14 @@ import argparse
 import sys
 
 import numpy as np
+import pandas as pd 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import ndcg_score
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
-from torch.utils.data import DataLoader, Dataset, TensorDataset, random_split
+from torch.utils.data import DataLoader, Dataset, random_split
 from tqdm.auto import tqdm
 
 sys.path.append("../")
@@ -125,6 +127,46 @@ def eval_downstream(model,device):
     
     return valid_acc
 
+def evaluate_sklearn(pred, ans, config):
+    results = {}
+
+    one_hot_ans = np.arange(ans.shape[0])[ans > 0]
+    sorted_prediction = np.argsort(pred)
+    for topk in config["topk"]:
+        one_hot_pred = sorted_prediction[-topk:]
+        hit = np.intersect1d(one_hot_pred, one_hot_ans)
+        percision = len(hit) / topk
+        # print(percision)
+        recall = len(hit) / len(one_hot_ans)
+        # print(recall)
+        f1 = 2 * percision * recall / \
+            (percision + recall) if (percision + recall) > 0 else 0
+
+        results['F1@{}'.format(topk)] = f1
+
+    ans = ans.reshape(1, -1)
+    pred = pred.reshape(1, -1)
+    for topk in config["topk"]:
+        results['ndcg@{}'.format(topk)] = ndcg_score(ans, pred, k=topk)
+
+    results['ndcg@all'] = (ndcg_score(ans, pred, k=None))
+
+    return results
+
+def evaluate_decompose(model, device, config):
+    model.eval()
+    result = []
+    for word, length, label in tqdm(valid_loader):
+        word = word.to(device)
+        with torch.no_grad():
+            vec = model.get_docvec(word, length)
+            decoded = model.decoder(vec)
+        for idx in range(len(label)):
+            res = evaluate_sklearn(decoded.cpu()[idx], label.cpu()[idx],config)
+            result.append(res)
+    result = pd.DataFrame(result).mean()
+    return result
+
 class BertDataset(Dataset):
 
     def __init__(self, paded_context, seq_length, labels) -> None:
@@ -152,6 +194,7 @@ if __name__ == '__main__':
     parser.add_argument('--word2embedding_path', type=str,
                         default="glove.6B.100d.txt")
     parser.add_argument('--gpu', type=int, default=0)
+    parser.add_argument('--topk', type=int, nargs='+', default=[10, 30, 50])
 
     args = parser.parse_args()
     config = vars(args)
@@ -200,18 +243,19 @@ if __name__ == '__main__':
         running_loss = []
         running_lmloss = []
         running_listnetloss = []
-        listnet_weight = 1 if epoch > 0 else 0
         model.train()
         for batch in tqdm(train_loader):
             batch = [i.to(device) for i in batch]
             word, length, label = batch
             length = length.cpu()
             decoded_output, logits = model(word, length)
-            listnet_loss = ListNet(decoded_output, label)
+            label = torch.nn.functional.normalize(label.to(device), dim=1)
+            decoded = torch.nn.functional.normalize(decoded_output, dim=1)
+            listnet_loss = ListNet(decoded, label)
             logits = logits[:,:-1,:].reshape(-1, vocab_size)
             target = word[:,1:].reshape(-1)
             lm_loss = sequence_loss(logits, target)
-            loss = listnet_weight * listnet_loss + lm_loss
+            loss = listnet_loss + lm_loss
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
@@ -232,18 +276,7 @@ if __name__ == '__main__':
             )
         if (epoch+1) % 20 ==0:
             valid_acc = eval_downstream(model,device)
+            decompose_res = evaluate_decompose(model, device, config)
             print(f"Validation accuracy:{valid_acc:.4f}")
-
-
-# model.eval()
-# valid_acc = eval_downstream(model,device)
-# print(f"Validation accuracy:{valid_acc:.4f}")
-# document_vectors = []
-# for word, length in tqdm(full_loader):
-#     word = word.to(device)
-#     with torch.no_grad():
-#         vec = model.get_docvec(word, length)
-#     document_vectors.append(vec)
-# document_vectors = torch.cat(document_vectors,dim=0).detach().cpu().numpy()
-# print("Saving document vectors")
-# np.save(f"docvec_20news_LstmLM_{config['dim']}d.npy", document_vectors)
+            print("Decompose result:")
+            print(decompose_res)
