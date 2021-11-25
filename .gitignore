@@ -10,3 +10,5 @@ __pycache__
 test.py
 *.pth
 *.png
+aclImdb
+*.txt
