@@ -20,7 +20,7 @@ def ListNet(y_pred, y_true, eps=1e-10):
 
     return torch.mean(torch.sum(-y_true * pred_log, dim=1))
 
-def listNet_origin(y_pred, y_true, eps=1e-10, padded_value_indicator=-1):
+def listNet_origin(y_pred, y_true, eps=1e-10):
     """
     ListNet loss introduced in "Learning to Rank: From Pairwise Approach to Listwise Approach".
     :param y_pred: predictions from the model, shape [batch_size, slate_length]
@@ -28,15 +28,9 @@ def listNet_origin(y_pred, y_true, eps=1e-10, padded_value_indicator=-1):
     :param eps: epsilon value, used for numerical stability
     :param padded_value_indicator: an indicator of the y_true index containing a padded item, e.g. -1
     :return: loss value, a torch.Tensor
-
-    Note: ignore zero value by setting padded_value_indicator = 0
     """
     y_pred = y_pred.clone()
     y_true = y_true.clone()
-
-    mask = y_true == padded_value_indicator
-    y_pred[mask] = float('-inf')
-    y_true[mask] = float('-inf')
 
     preds_smax = F.softmax(y_pred, dim=1)
     true_smax = F.softmax(y_true, dim=1)
@@ -124,3 +118,29 @@ def MSERankLoss(y_pred, y_true):
     label_rank, rank_l = torch.sort(y_true, dim=1, descending=True)
 
     return torch.nn.MSELoss().forward(torch.FloatTensor(rank_p), torch.FloatTensor(rank_l))
+
+def MultiLabelMarginLossPos(y_pred, y_pos_id, y_neg_id, alpha=1):
+    """
+    MultiLabelMarginLoss add positive pairs
+    y_pos_id -> index of positive target, the same as MultiLabelMarginLoss before -1
+    y_neg_id -> index of negative target
+    alpha -> magnitude of positive pairs compared to negative pairs, since normally negative pairs are 100 times more than positive pairs
+    """
+
+    y_pos = y_pred.gather(1, y_pos_id)
+    y_neg = y_pred.gather(1, y_neg_id)
+    
+    m = y_pos.view(y_pos.shape[0], y_pos.shape[1], 1) - y_neg.view(y_neg.shape[0], 1, y_neg.shape[1])
+    m = 1 - m
+    l = torch.max(m, torch.zeros(m.shape).to(device))
+    l = torch.sum(l)
+    
+    mp = y_pos.view(y_pos.shape[0], y_pos.shape[1], 1) - y_pos.view(y_pos.shape[0], 1, y_pos.shape[1])
+
+    mp = 1 - mp - torch.eye(mp.shape[-1]).to(device)
+    lp = torch.max(mp, torch.zeros(mp.shape).to(device))
+    lp = torch.sum(lp)
+    
+    loss = (l + alpha * lp) / y_pred.shape[1] / y_pred.shape[0]
+    
+    return loss
