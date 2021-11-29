@@ -12,8 +12,11 @@ def ListNet(y_pred, y_true, eps=1e-10):
     y_pred = y_pred.clone()
     y_true = y_true.clone()
 
-    # pred_smax = torch.nn.functional.softmax(y_pred, dim=1)
+    y_pred = torch.nn.functional.softmax(y_pred, dim=1)
     # true_smax = torch.nn.functional.softmax(y_true, dim=1)
+    
+    y_pred = torch.nn.functional.normalize(y_pred, dim=1)
+    y_true = torch.nn.functional.normalize(y_true, dim=1)
 
     pred = y_pred + eps
     pred_log = torch.log(pred)

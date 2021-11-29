@@ -16,6 +16,8 @@ from sklearn.metrics import ndcg_score
 
 from transformers import AdamW, get_linear_schedule_with_warmup, BertTokenizer, BertForMaskedLM, RobertaTokenizer, RobertaForMaskedLM, AlbertTokenizer, AlbertForMaskedLM
 from sklearn.linear_model import LogisticRegression
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.decomposition import PCA, TruncatedSVD
 from utils.Loss import ListNet
 from utils.data_processing import get_process_data
 
@@ -255,7 +257,7 @@ def train_model(config, data_loader, training_set, validation_set, output_dim, t
         if (epoch + 1) % 10 == 0:
             doc_emb = generate_document_embedding(encoder, data_loader)
             val_acc = evaluate_downstream(doc_emb, targets, training_set, validation_set) 
-            record = open('./'+config['member']+'_mlm'+config['mlm_pretrain']+'_sheduler'+config['scheduler']+'.txt', 'a')
+            record = open('./'+ config['dataset'] +config['member']+'_mlm'+config['mlm_pretrain']+'_sheduler'+config['scheduler']+'.txt', 'a')
             results_m = pd.DataFrame(results).mean()
             record.write('------'+str(epoch)+'------\n')
             record.write(str(results_m))
@@ -306,7 +308,7 @@ def train_encoder(config, data_loader, targets):
         if (epoch + 1) % 10 == 0:
             doc_emb = generate_document_embedding(encoder, data_loader)
             val_acc = evaluate_downstream(doc_emb, targets, training_set, validation_set) 
-            record = open('./'+config['member']+'_mlm'+config['mlm_pretrain']+'_sheduler'+config['scheduler']+'.txt', 'a')
+            record = open('./'+ config['dataset'] +config['member']+'_mlm'+config['mlm_pretrain']+'_sheduler'+config['scheduler']+'.txt', 'a')
             record.write('------'+str(epoch)+'------\n')
             record.write('ACC: '+str(val_acc))
             record.write('\n-------------------------------\n')
@@ -319,13 +321,20 @@ def train_encoder(config, data_loader, targets):
     return encoder
 
 
-def evaluate_pretrain(config, dataloader, targets):
+def evaluate_pretrain(config, data_loader, training_set, validation_set, targets):
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     encoder = BertFamily(config['member'], device).eval()
     doc_emb = generate_document_embedding(encoder, data_loader)
     val_acc = evaluate_downstream(doc_emb, targets, training_set, validation_set) 
-    record = open('./'+config['member']+'_mlm'+config['mlm_pretrain']+'_sheduler'+config['scheduler']+'.txt', 'a')
+    record = open('./'+ config['dataset'] +config['member']+'_mlm'+config['mlm_pretrain']+'_sheduler'+config['scheduler']+'.txt', 'a')
+    record.write('\nACC: '+str(val_acc))
+    record.write('\n-------------------------------\n')
+    record.close()
+
+def evaluate_tfidf(config, tfidf, training_set, validation_set, targets):
+    val_acc = evaluate_downstream(tfidf, targets, training_set, validation_set)
+    record = open('./'+ config['dataset'] +config['member']+'_mlm'+config['mlm_pretrain']+'_sheduler'+config['scheduler']+'.txt', 'a')
     record.write('\nACC: '+str(val_acc))
     record.write('\n-------------------------------\n')
     record.close()
@@ -336,20 +345,20 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, default="20news")
     parser.add_argument('--label', type=str, default="tfidf")
     parser.add_argument('--member', type=str, default='bert')       # (1) bert (2) roberta (3) albert
-    parser.add_argument('--mlm_pretrain', type=str, default="True") # (1) True: ListNet + MLM (2) False: ListNet (3) Only: MLM (4) Pretrain
+    parser.add_argument('--mlm_pretrain', type=str, default="True") # (1) True: ListNet + MLM (2) False: ListNet (3) Only: MLM (4) Pretrain (5) TFIDF
     parser.add_argument('--gpu', type=int, default=0)
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--epochs', type=int, default=200)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--scheduler', type=str, default='False')
-    parser.add_argument('--seed', type=int, default=123)   
+    parser.add_argument('--seed', type=int, default=123)
     parser.add_argument('--topk', type=int, nargs='+', default=[10, 30, 50])
     args = parser.parse_args()
     config = vars(args)
 
     same_seeds(config["seed"])
 
-    data_dict = get_process_data(config["dataset"], word2embedding_path = '../../data/glove.6B.100d.txt')
+    data_dict = get_process_data(config["dataset"], word2embedding_path = '')
     raw_data = data_dict["dataset"]
     documents, targets, target_num = raw_data["documents"], raw_data["target"], raw_data["num_classes"]
 
@@ -374,8 +383,14 @@ if __name__ == '__main__':
     if config['mlm_pretrain'] == 'Only':
         encoder = train_encoder(config, data_loader, targets)
     elif config['mlm_pretrain'] == 'Pretrain':
-        # Only use pretrain bert
-        evaluate_pretrain(config, data_loader, targets)
+        evaluate_pretrain(config, data_loader, training_set, validation_set, targets)
+    elif config['mlm_pretrain'] == 'TFIDF':
+        vectorizer = TfidfVectorizer()
+        tfidf = vectorizer.fit_transform(documents)
+        # pca = TruncatedSVD(n_components=768)
+        # tfidf = pca.fit_transform(tfidf)
+        # print(tfidf.shape)
+        evaluate_tfidf(config, tfidf, training_set, validation_set, targets)
     else:
         encoder, decoder = train_model(config, data_loader, training_set, validation_set, vocab_size, targets)
 
