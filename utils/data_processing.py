@@ -293,19 +293,14 @@ def get_process_data(dataset: str, agg: str = 'IDF', embedding_type: str = '',
                        documentembedding_normalize=documentembedding_normalize)
 
     # Prepare document representations.
-    if load_embedding and (os.path.exists("document_word_weight.npy") and os.path.exists("document_embedding.npy")):
-        print("Load from saving")
-        document_word_weight = list(np.load("document_word_weight.npy", allow_pickle=True))
-        document_embedding = list(np.load("document_embedding.npy", allow_pickle=True))
-        document_error = list(np.load("document_error.npy", allow_pickle=True))
-    else:
-        document_word_weight, document_embedding, document_error = vocab.get_document_representation()
-        np.save("document_word_weight.npy", document_word_weight)
-        np.save("document_embedding.npy", document_embedding)
-        np.save("document_error.npy", document_error)
+    document_word_weight, document_embedding, document_error = vocab.get_document_representation()
 
     document_data, document_word_weight, document_embedding = del_error_documents(
         document_data, document_word_weight, document_embedding, document_error)
+
+    document_data["target"] = np.array(document_data["target"])
+    document_word_weight = np.array(document_word_weight)
+    document_embedding = np.array(document_embedding)
 
     index_data = None
     # Prepare document embedding.

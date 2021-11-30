@@ -48,6 +48,40 @@ def load_document(dataset):
             label = 1 if target_type == "pos" else 0
             label = [label] * len(files_name)
             target.extend(label)
+    elif dataset == "MR":
+        target = []
+        documents = []
+        num_classes = 2
+
+        sub_file = ["rt-polarity.pos", "rt-polarity.neg"]
+        dir_prefix = "./SentEval/data/downstream/MR"
+        for target_type in sub_file:
+            file_name = os.path.join(dir_prefix, target_type)
+            with open(file_name, "r") as f:
+                context = f.readlines()
+                documents.extend(context)
+
+            # assign label
+            label = 1 if target_type == "rt-polarity.pos" else 0
+            label = [label] * len(context)
+            target.extend(label)
+    elif dataset == "CR":
+        target = []
+        documents = []
+        num_classes = 2
+
+        sub_file = ["custrev.pos", "custrev.neg"]
+        dir_prefix = "./SentEval/data/downstream/CR"
+        for target_type in sub_file:
+            file_name = os.path.join(dir_prefix, target_type)
+            with open(file_name, "r") as f:
+                context = f.readlines()
+                documents.extend(context)
+
+            # assign label
+            label = 1 if target_type == "custrev.pos" else 0
+            label = [label] * len(context)
+            target.extend(label)
     else:
         raise NotImplementedError
 

@@ -8,7 +8,7 @@ from tqdm.auto import tqdm
 import torch
 import torch.nn as nn
 
-sys.path.append("../..")
+sys.path.append("../")
 
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataset import random_split
@@ -336,7 +336,7 @@ if __name__ == '__main__':
     documents, targets, target_num = raw_data["documents"], raw_data["target"], raw_data["num_classes"]
 
     if (config["label"] == "tfidf"):
-        labels = data_dict["document_tfidf"]
+        labels = data_dict["document_word_weight"]
     else:
         labels = None
 
