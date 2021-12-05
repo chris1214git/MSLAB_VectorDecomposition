@@ -4,11 +4,31 @@ import numpy as np
 
 from tqdm.auto import tqdm
 from sklearn.datasets import fetch_20newsgroups
+from datasets import load_dataset
+
+
+def normalize_wordemb(word2embedding):
+    # Every word emb should have norm 1
+    word_emb = []
+    word_list = []
+    for word, emb in word2embedding.items():
+        word_list.append(word)
+        word_emb.append(emb)
+
+    word_emb = np.array(word_emb)
+
+    for i in range(len(word_emb)):
+        norm = np.linalg.norm(word_emb[i])
+        word_emb[i] = word_emb[i] / norm
+
+    for word, emb in tqdm(zip(word_list, word_emb)):
+        word2embedding[word] = emb
+
+    return word2embedding
 
 
 def load_word2emb(embedding_file):
     word2embedding = dict()
-    word_dim = int(re.findall(r".(\d+)d", embedding_file)[0])
 
     with open(embedding_file, "r") as f:
         for line in tqdm(f):
@@ -22,6 +42,19 @@ def load_word2emb(embedding_file):
     return word2embedding
 
 
+def load_word2embedding(word2embedding_path: str, word2embedding_normalize: bool):
+    word2embedding = None
+    if word2embedding_path != '':
+        assert os.path.exists(word2embedding_path)
+        print("Loading word2embedding from {}".format(word2embedding_path))
+        word2embedding = load_word2emb(word2embedding_path)
+        if word2embedding_normalize:
+            print("Normalizing word2embedding")
+            word2embedding = normalize_wordemb(word2embedding)
+
+    return word2embedding
+
+
 def load_document(dataset):
     if dataset == "20news":
         num_classes = 20
@@ -30,24 +63,11 @@ def load_document(dataset):
         documents = [doc.strip("\n") for doc in raw_text]
         target = list(target)
     elif dataset == "IMDB":
-        target = []
-        documents = []
+        data = load_dataset("imdb",split="train+test")
+        documents = data["text"]
+        target = data["label"]
         num_classes = 2
 
-        sub_dir = ["pos", "neg"]
-        dir_prefix = "./aclImdb/train/"
-        for target_type in sub_dir:
-            data_dir = os.path.join(dir_prefix, target_type)
-            files_name = os.listdir(data_dir)
-            for f_name in files_name:
-                with open(os.path.join(data_dir, f_name), "r") as f:
-                    context = f.readlines()
-                    documents.extend(context)
-
-            # assign label
-            label = 1 if target_type == "pos" else 0
-            label = [label] * len(files_name)
-            target.extend(label)
     elif dataset == "MR":
         target = []
         documents = []
@@ -80,6 +100,23 @@ def load_document(dataset):
 
             # assign label
             label = 1 if target_type == "custrev.pos" else 0
+            label = [label] * len(context)
+            target.extend(label)
+    elif dataset == "SUBJ":
+        target = []
+        documents = []
+        num_classes = 2
+
+        sub_file = ["subj.objective", "subj.subjective"]
+        dir_prefix = "./SentEval/data/downstream/SUBJ"
+        for target_type in sub_file:
+            file_name = os.path.join(dir_prefix, target_type)
+            with open(file_name, "r") as f:
+                context = f.readlines()
+                documents.extend(context)
+
+            # assign label
+            label = 1 if target_type == "subj.objective" else 0
             label = [label] * len(context)
             target.extend(label)
     else:
