@@ -122,4 +122,4 @@ def load_document(dataset):
     else:
         raise NotImplementedError
 
-    return {"documents": documents, "target": target, "num_classes": num_classes}
+    return {"documents": documents, "target": np.array(target), "num_classes": num_classes}
