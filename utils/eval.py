@@ -1,4 +1,7 @@
+import numpy as np
 import torch
+from sklearn.linear_model import LogisticRegression
+
 
 def _dcg(target: torch.tensor):
     """Computes Discounted Cumulative Gain for input tensor."""
@@ -75,3 +78,19 @@ def retrieval_precision_all(preds, target, k = [10]):
         precision_scores[topk] = relevant.mean().item()
     
     return precision_scores
+
+
+def evaluate_downstream(document_vectors, targets, train_dataset, test_dataset):
+    # LR 
+    train_x = document_vectors[train_dataset.indices,:]
+    train_y = targets[train_dataset.indices]
+
+    test_x = document_vectors[test_dataset.indices,:]
+    test_y = targets[test_dataset.indices]
+    
+    classifier = LogisticRegression(solver="liblinear")
+    classifier.fit(train_x, train_y)
+    preds = classifier.predict(test_x)
+    valid_acc = np.mean(preds == test_y)
+    
+    return valid_acc
