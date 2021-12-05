@@ -4,6 +4,7 @@ import numpy as np
 
 from tqdm.auto import tqdm
 from sklearn.datasets import fetch_20newsgroups
+from datasets import load_dataset
 
 
 def load_word2emb(embedding_file):
@@ -30,24 +31,10 @@ def load_document(dataset):
         documents = [doc.strip("\n") for doc in raw_text]
         target = list(target)
     elif dataset == "IMDB":
-        target = []
-        documents = []
+        data = load_dataset("imdb",split="train+test")
+        documents = data["text"]
+        target = data["label"]
         num_classes = 2
-
-        sub_dir = ["pos", "neg"]
-        dir_prefix = "./aclImdb/train/"
-        for target_type in sub_dir:
-            data_dir = os.path.join(dir_prefix, target_type)
-            files_name = os.listdir(data_dir)
-            for f_name in files_name:
-                with open(os.path.join(data_dir, f_name), "r") as f:
-                    context = f.readlines()
-                    documents.extend(context)
-
-            # assign label
-            label = 1 if target_type == "pos" else 0
-            label = [label] * len(files_name)
-            target.extend(label)
     elif dataset == "MR":
         target = []
         documents = []
