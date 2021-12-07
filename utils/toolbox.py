@@ -9,7 +9,7 @@ def get_freer_gpu():
     memory_available = [int(x.split()[2])
                         for x in open('tmp', 'r').readlines()]
     os.system('rm -f tmp')
-    return int(np.argmax(memory_available))
+    return "cuda:{}".format(int(np.argmax(memory_available)))
 
 
 def same_seeds(seed):
@@ -30,18 +30,19 @@ def show_settings(config):
     print(settings)
     print('-----------------------')
 
+
 def split_data(dataset, config):
     train_length = int(len(dataset)*0.6)
     valid_length = int(len(dataset)*0.2)
     test_length = len(dataset) - train_length - valid_length
 
     train_dataset, valid_dataset, test_dataset = random_split(
-        dataset, lengths=[train_length, valid_length,test_length],
+        dataset, lengths=[train_length, valid_length, test_length],
         generator=torch.Generator().manual_seed(42)
-        )
+    )
 
     train_loader = DataLoader(
-        train_dataset, batch_size=config["batch_size"], 
+        train_dataset, batch_size=config["batch_size"],
         shuffle=True, pin_memory=True,
     )
     valid_loader = DataLoader(

@@ -107,6 +107,7 @@ def main():
     parser = argparse.ArgumentParser(description='document decomposition.')
     parser.add_argument('--dataset', type=str, default="IMDB")
     parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--gpu', type=str, default=get_freer_gpu())
     parser.add_argument('--seed', type=int, default=123)
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=64)
@@ -120,7 +121,7 @@ def main():
 
     same_seeds(config["seed"])
 
-    device = "cuda:{}".format(get_freer_gpu())  # Use the gpu with the most vram.
+    device = config["gpu"]
 
     data_dict = get_process_data(config["dataset"])
 
