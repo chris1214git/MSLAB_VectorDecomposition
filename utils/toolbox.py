@@ -9,7 +9,7 @@ def get_freer_gpu():
     memory_available = [int(x.split()[2])
                         for x in open('tmp', 'r').readlines()]
     os.system('rm -f tmp')
-    return int(np.argmax(memory_available))
+    return "cuda:{}".format(int(np.argmax(memory_available)))
 
 
 def same_seeds(seed):
