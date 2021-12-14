@@ -213,13 +213,12 @@ class Vocabulary:
             else:
                 if self.documentembedding_normalize:
                     total_weight = np.sum(document_word_weight)
-                    document_vector /= total_weight
+                    document_embedding /= total_weight
                     document_word_weight /= total_weight
                     
             document_word_weights.append(document_word_weight)
             document_embeddings.append(document_embedding)
         
-        self.check_docemb()
         return document_word_weights, document_embeddings, document_error
 
 def normalize_wordemb(word2embedding):
