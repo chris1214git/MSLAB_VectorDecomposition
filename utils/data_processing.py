@@ -11,21 +11,21 @@ from nltk.collocations import BigramAssocMeasures, BigramCollocationFinder
 
 import torch
 from torch.nn.utils.rnn import pad_sequence
+from sklearn.feature_extraction.text import TfidfVectorizer
 
-from .data_loader import load_document, load_word2emb
+from .data_loader import load_document, load_word2embedding
 
 
 class Vocabulary:
     def __init__(self, document_list, agg="IDF", word2embedding=None,
-                 min_word_freq_threshold=0, topk_word_freq_threshold=0, documentembedding_normalize=False):
+                 min_df=10, max_df=1.0):
         # The low frequency words will be assigned as <UNK> token
         self.itos = {0: "<UNK>"}
         self.stoi = {"<UNK>": 0}
 
-        self.min_word_freq_threshold = min_word_freq_threshold
-        self.topk_word_freq_threshold = topk_word_freq_threshold
-        self.documentembedding_normalize = documentembedding_normalize
-        
+        self.min_df = min_df
+        self.max_df = max_df
+
         self.IDF = {}
         self.agg = agg
         self.ps = PorterStemmer()
@@ -33,8 +33,6 @@ class Vocabulary:
         self.word2embedding = word2embedding
         self.word_freq_in_corpus = defaultdict(int)
         self.stop_words = set(stopwords.words('english'))
-
-        self.build_vocabulary()
 
     def __len__(self):
         return len(self.itos)
@@ -132,8 +130,9 @@ class Vocabulary:
         # delete less freq words:
         delete_words = []
         for word, v in self.word_freq_in_corpus.items():
-            if v < self.min_word_freq_threshold:
+            if v < self.min_df:
                 delete_words.append(word)
+
         for word in delete_words:
             del self.IDF[word]
             del self.word_freq_in_corpus[word]
@@ -143,7 +142,7 @@ class Vocabulary:
         IDF = [(word, freq) for word, freq in self.IDF.items()]
         IDF.sort(key=lambda x: x[1])
 
-        for i in range(self.topk_word_freq_threshold):
+        for i in range(self.max_df):
             word = IDF[i][0]
             del self.IDF[word]
             del self.word_freq_in_corpus[word]
@@ -155,159 +154,93 @@ class Vocabulary:
             self.itos[idx] = word
             idx += 1
 
-    def check_docemb(self):
-        word_vectors = np.array(self.word_vectors)
-        pred = np.zeros(word_vectors.shape[1])
-        cnt = 0
+    def generate_select_words(self, sentence):
+        select_words = []
+        for word in self.tokenizer_eng(sentence):
+            # pass unknown word
+            if word not in self.stoi:
+                continue
+            else:
+                select_words.append(word)
+        return select_words
 
-        for word_idx in self.document_answers_idx[0]:
-            pred += word_vectors[word_idx] * self.word_weight[self.itos[word_idx]]
-            cnt += self.word_weight[self.itos[word_idx]]
-        
-        if self.config["document_vector_weight_normalize"]:
-            pred /= cnt
-        assert np.sum(self.document_vectors[0]) - np.sum(pred) == 0
-        
-    def get_document_representation(self):
+    def get_weighted_embedding(self):
 
         # Calculate document representation (TFIDF and weighted embedding).
-        document_error = []
-        document_word_weights = []
         document_embeddings = []
 
         word_dim = len(self.stoi)
         embedding_dim = len(self.word2embedding.get(
             "apple", 0)) if self.word2embedding != None else 0
 
+        # Geberate weughted embedding.
+        self.build_vocabulary()
+
         print("Vocabulary size:{}, Word embedding dim:{}".format(
             word_dim, embedding_dim))
-
         print("Initial word weight")
         self.init_word_weight()
-        
-        for sen_id, sentence in enumerate(tqdm(self.document_list, desc="Calculate document vectors...")):
 
-            # Prepare document representation for each document.
-            select_words = []
-            document_word_weight = np.zeros(word_dim)
+        for sen_id, sentence in enumerate(tqdm(self.document_list, desc="Calculate weighted document embedding...")):
+
             document_embedding = np.zeros(embedding_dim)
 
-            for word in self.tokenizer_eng(sentence):
-                # pass unknown word
-                if word not in self.stoi:
-                    continue
-                else:
-                    select_words.append(word)
-                    
+            # Prepare document representation for each document.
+            select_words = self.generate_select_words(sentence)
+
             # aggregate doc vectors
             for word in select_words:
-                document_word_weight[self.stoi[word]] += self.IDF[word]
-                if (self.word2embedding != None):
-                    document_embedding += self.word2embedding[word] * \
-                        self.word_weight[word]
+                document_embedding += self.word2embedding[word] * \
+                    self.word_weight[word]
 
-            if len(select_words) <= 5:
-                document_error.append(sen_id)
-                # print('error', sentence)
-                # continue
-            else:
-                if self.documentembedding_normalize:
-                    total_weight = np.sum(document_word_weight)
-                    document_embedding /= total_weight
-                    document_word_weight /= total_weight
-                    
-            document_word_weights.append(document_word_weight)
             document_embeddings.append(document_embedding)
-        
-        return document_word_weights, document_embeddings, document_error
 
-def normalize_wordemb(word2embedding):
-    # Every word emb should have norm 1
+        return np.array(document_embeddings)
 
-    word_emb = []
-    word_list = []
-    for word, emb in word2embedding.items():
-        word_list.append(word)
-        word_emb.append(emb)
+    def get_document_tfidf(self):
+        # Generate document tfidf.
+        print("Generating document tfidf representation...")
+        vectorizer = TfidfVectorizer(max_df=self.max_df,
+                                     min_df=self.min_df, stop_words="english")
+        document_tfidf = vectorizer.fit_transform(
+            self.document_list).toarray()
+        print("Document TFIDF dim:{}".format(document_tfidf.shape))
 
-    word_emb = np.array(word_emb)
-
-    for i in range(len(word_emb)):
-        norm = np.linalg.norm(word_emb[i])
-        word_emb[i] = word_emb[i] / norm
-
-    for word, emb in tqdm(zip(word_list, word_emb)):
-        word2embedding[word] = emb
-    return word2embedding
+        return document_tfidf
 
 
-def del_error_documents(document_data, document_word_weight, document_embedding, document_error):
-    print('delete items', len(document_error))
-    for err_idx in sorted(document_error, reverse=True):
-        # print('error', document_data["documents"][err_idx]) 
-        # print('target', document_data["target"][err_idx])
-        del document_data["documents"][err_idx]
-        del document_data["target"][err_idx]
-        del document_word_weight[err_idx]
-        del document_embedding[err_idx]
-
-    return document_data, document_word_weight, document_embedding
-
-
-def get_process_data(dataset: str, agg: str = 'IDF', embedding_type: str = '', 
-                     word2embedding_path: str = '../data/glove.6B.100d.txt',
-                     word2embedding_normalize: bool = False, documentembedding_normalize: bool = False,
-                     embedding_dim: int = 128, min_word_freq_threshold: int = 5,
-                     topk_word_freq_threshold: int = 100, max_seq_length: int = 128,
-                     load_embedding: bool = True) -> dict:
+def get_process_data(dataset: str, agg: str = 'IDF', embedding_type: str = '',
+                     word2embedding_path: str = '', word2embedding_normalize: bool = False,
+                     min_df=10, max_df=1.0, max_seq_length: int = 128) -> dict:
     # Input contents:
     # (1). dataset: Dataset name use for training and inference
     # (2). embedding_type: Return document embedding used for directly training decoder.
     # (3). word2embedding_path: Pretrain embedding model path, such as glove.6B.100d.txt.
-    # (4). documentembedding_normalize: True for weighted mean, False for weighted sum 
     # Return contents:
     # (1). document_word_weight: Tfidf vectors for all documents, shape: [num_documents, vocab_size]
-    # (2). document_embedding: Embedding vecotrs create from pretrain encoder, shape: [num_documents, embedding_dim]
-    # (3). dataset: raw data, target and num_classes which used to train downstream task.
-    # (4). LSTM_data: Contrains seq_length, paded_context, target_tensor, used to train LSTM autoencoder.
-    
-    word2embedding = None
+    # (2). document_embedding: Weighted glove embedding representation for all documents, shape: [num_documents, glove_embedding_size]
+    # (4). dataset: raw data, target and num_classes which used to train downstream task.
+    # (5). LSTM_data: Contrains seq_length, paded_context, target_tensor, used to train LSTM autoencoder.
 
     # Prepare dataset.
+    # Return {documents, target, num_classes}
     document_data = load_document(dataset)
 
-    if word2embedding_path != '':
-        if not os.path.exists(word2embedding_path):
-            print('Error: no word embedding', word2embedding_path)
-            exit()
+    word2embedding = load_word2embedding(
+        word2embedding_path, word2embedding_normalize)
 
-        print("Loading word2embedding from {}".format(word2embedding_path))
-        word2embedding = load_word2emb(word2embedding_path)
-        if word2embedding_normalize:
-            print("Normalizing word2embedding")
-            word2embedding = normalize_wordemb(word2embedding)
-
-    vocab = Vocabulary(document_data["documents"], agg=agg, word2embedding=word2embedding, 
-                       min_word_freq_threshold=min_word_freq_threshold, topk_word_freq_threshold=topk_word_freq_threshold,
-                       documentembedding_normalize=documentembedding_normalize)
+    vocab = Vocabulary(document_data["documents"], agg=agg, word2embedding=word2embedding,
+                       min_df=min_df, max_df=max_df)
 
     # Prepare document representations.
-    document_word_weight, document_embedding, document_error = vocab.get_document_representation()
-
-    document_data, document_word_weight, document_embedding = del_error_documents(
-        document_data, document_word_weight, document_embedding, document_error)
-
-    document_data["target"] = np.array(document_data["target"])
-    document_word_weight = np.array(document_word_weight)
-    document_embedding = np.array(document_embedding)
+    document_word_weight = vocab.get_document_tfidf()
+    document_embedding = vocab.get_weighted_embedding() if word2embedding != None else None
 
     index_data = None
     # Prepare document embedding.
     if (embedding_type == "LSTM"):
-        document_embedding = np.load("../data/docvec_20news_LSTM_{}d.npy".format(embedding_dim))
+        # prepare LSTM index input.
         index_data = vocab.document2index(document_data, max_seq_length)
-    elif (embedding_type == "BERT"):
-        document_embedding = np.load("docvec_20news_BertMLM.npy")
-    
+
     return {"document_word_weight": document_word_weight, "document_embedding": document_embedding,
             "dataset": document_data, "LSTM_data": index_data}

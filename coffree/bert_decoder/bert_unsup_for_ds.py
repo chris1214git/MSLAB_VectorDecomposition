@@ -18,7 +18,7 @@ from transformers import AdamW, get_linear_schedule_with_warmup, BertTokenizer, 
 from sklearn.linear_model import LogisticRegression
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import PCA, TruncatedSVD
-from utils.Loss import ListNet
+from utils.loss import ListNet
 from utils.data_processing import get_process_data
 
 def same_seeds(seed):
@@ -247,7 +247,7 @@ def train_model(config, data_loader, training_set, validation_set, output_dim, t
                 else:
                     loss = decode_loss
                 val_loss += loss.item()
-                if (epoch + 1) % 10 == 0:
+                if (epoch + 1) % 1 == 0:
                     decoded = decoded.cpu()
                     label = label.cpu()
                     for idx in range(len(label)):
@@ -331,6 +331,7 @@ def evaluate_pretrain(config, data_loader, training_set, validation_set, targets
     record.write('\nACC: '+str(val_acc))
     record.write('\n-------------------------------\n')
     record.close()
+    print("Accuracy:", val_acc)
 
 def evaluate_tfidf(config, tfidf, training_set, validation_set, targets):
     val_acc = evaluate_downstream(tfidf, targets, training_set, validation_set)
@@ -338,6 +339,7 @@ def evaluate_tfidf(config, tfidf, training_set, validation_set, targets):
     record.write('\nACC: '+str(val_acc))
     record.write('\n-------------------------------\n')
     record.close()
+    print("Accuracy:", val_acc)
 
 
 if __name__ == '__main__':
@@ -358,7 +360,7 @@ if __name__ == '__main__':
 
     same_seeds(config["seed"])
 
-    data_dict = get_process_data(config["dataset"], word2embedding_path = '')
+    data_dict = get_process_data(config["dataset"])
     raw_data = data_dict["dataset"]
     documents, targets, target_num = raw_data["documents"], raw_data["target"], raw_data["num_classes"]
 
@@ -371,7 +373,7 @@ if __name__ == '__main__':
     vocab_size = len(labels[0])
     ranks = np.zeros((doc_num, vocab_size), dtype='float32')
     for i in range(doc_num):
-        ranks[i] = np.argsort(labels[i])[::-1]
+        ranks[i] = np.argsort(labels[i])
 
     train_size_ratio = 0.8
     train_size = int(doc_num * train_size_ratio)
@@ -385,12 +387,12 @@ if __name__ == '__main__':
     elif config['mlm_pretrain'] == 'Pretrain':
         evaluate_pretrain(config, data_loader, training_set, validation_set, targets)
     elif config['mlm_pretrain'] == 'TFIDF':
-        vectorizer = TfidfVectorizer()
-        tfidf = vectorizer.fit_transform(documents)
+        # vectorizer = TfidfVectorizer(max_df=100, min_df=5)
+        # tfidf = vectorizer.fit_transform(documents)
         # pca = TruncatedSVD(n_components=768)
         # tfidf = pca.fit_transform(tfidf)
         # print(tfidf.shape)
-        evaluate_tfidf(config, tfidf, training_set, validation_set, targets)
+        evaluate_tfidf(config, labels, training_set, validation_set, targets)
     else:
         encoder, decoder = train_model(config, data_loader, training_set, validation_set, vocab_size, targets)
 
