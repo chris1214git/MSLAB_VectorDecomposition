@@ -190,12 +190,9 @@ def MSE(y_pred, y_true):
     return torch.mean(torch.sum(loss, dim=1))
 
 def ListNet2(y_pred, y_true):
-    y_pred_min = torch.min(y_pred, dim=1)[0].view(-1, 1)
-    y_true_min = torch.min(y_true, dim=1)[0].view(-1, 1)
+
+    preds_smax = F.softmax(y_pred, dim=1)
+    true_smax = F.softmax(y_true, dim=1)
     
-    y_pred = y_pred + y_pred_min + 10
-    y_true = y_true + y_true_min + 10
-
-    pred_log = torch.log(y_pred)
-
-    return torch.mean(torch.sum(-y_true * pred_log, dim=1))
+    return (preds_smax - true_smax).pow(2).sum()/ true_smax.numel()
+    
