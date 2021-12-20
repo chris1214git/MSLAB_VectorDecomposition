@@ -51,3 +51,82 @@ def split_data(dataset, config):
         test_dataset, batch_size=config["batch_size"], shuffle=False)
 
     return train_loader, valid_loader, test_loader
+
+def doc_filter(raw_document, vocab):
+    PATTERN = r"(?u)\b\w\w+\b"
+    doc = re.findall(PATTERN, raw_document.lower())
+    return [x for x in doc if x in vocab]
+
+def generate_graph(doc_list, word2index, index2word):
+    window_size = 10
+    windows = []
+
+    # Traverse Each Document & Move window on each of them
+    for doc in doc_list:
+        length = len(doc)
+        if length <= window_size:
+            windows.append(doc)
+        else:
+            for i in range(length-window_size+1):
+                window = doc[i: i+window_size]
+                windows.append(window)
+    
+    word_freq = {}
+    word_pair_count = {}
+    for window in tqdm(windows, desc='Calculate word pair: '):
+        appeared = set()
+        for i in range(len(window)):
+            if window[i] not in appeared:
+                if window[i] in word_freq:
+                    word_freq[window[i]] += 1
+                else:
+                    word_freq[window[i]] = 1
+                appeared.add(window[i])
+            if i != 0:
+                for j in range(0, i):
+                    word_i = window[i]
+                    word_i_id = word2index[word_i]
+                    word_j = window[j]
+                    word_j_id = word2index[word_j]
+                    if word_i_id == word_j_id:
+                        continue
+                    word_pair_str = str(word_i_id) + ',' + str(word_j_id)
+                    if word_pair_str in word_pair_count:
+                        word_pair_count[word_pair_str] += 1
+                    else:
+                        word_pair_count[word_pair_str] = 1
+                    word_pair_str = str(word_j_id) + ',' + str(word_i_id)
+                    if word_pair_str in word_pair_count:
+                        word_pair_count[word_pair_str] += 1
+                    else:
+                        word_pair_count[word_pair_str] = 1
+    
+    row = []
+    col = []
+    edge = []
+    weight = []
+    # pmi as weights
+
+    num_window = len(windows)
+    count_mean = np.array(list(word_pair_count.values())).mean()
+    for key in tqdm(word_pair_count, desc='Construct Edge: '):
+        temp = key.split(',')
+        i = int(temp[0])
+        j = int(temp[1])
+        count = word_pair_count[key]
+        word_freq_i = word_freq[index2word[i]]
+        word_freq_j = word_freq[index2word[j]]
+        pmi = log((1.0 * count / num_window) /
+                (1.0 * word_freq_i * word_freq_j/(num_window * num_window)))
+        if pmi <= 0:
+            continue
+        row.append(i)
+        col.append(j)
+        if count >= count_mean:
+            edge.append([i, j])
+            edge.append([j, i])
+        weight.append(pmi)
+
+    print('# of Node: {}\n# of Edge: {}\nCount Mean: {}'.format(len(word2index), len(edge), count_mean))
+
+    return edge
