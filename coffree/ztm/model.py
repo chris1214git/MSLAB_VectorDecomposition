@@ -32,6 +32,7 @@ class ZTM_topic_embed(nn.Module):
     
     def __init__(self, bow_size, contextual_size, n_components, hidden_sizes, activation):
         super().__init__()
+        self.batch_norm = nn.BatchNorm1d(bow_size)
         self.word_embedding = nn.Parameter(torch.randn(128 + 768, bow_size))
         self.topic_embedding = nn.Parameter(torch.randn(n_components, 128))
         self._ZeroShotTM = ZeroShotTM(bow_size=bow_size, contextual_size=contextual_size, 
@@ -56,7 +57,7 @@ class ZTM_topic_embed(nn.Module):
         # embeded: batch_size x (128 + 768)
         embeded = torch.cat((topic_info, doc_embs), dim=1)
 
-        word_dists = torch.sigmoid(torch.matmul(embeded, self.word_embedding))
+        word_dists = torch.sigmoid(self.batch_norm(torch.matmul(embeded, self.word_embedding)))
         
         return word_dists
         
@@ -105,10 +106,11 @@ class ZTM_word_embed(nn.Module):
     
     def __init__(self, bow_size, contextual_size, n_components, hidden_sizes, activation):
         super().__init__()
-        self.word_embedding = nn.Parameter(torch.randn(1024 + 768, bow_size))
+        self.batch_norm = nn.BatchNorm1d(bow_size)
+        self.word_embedding = nn.Parameter(torch.randn(4096 + 768, bow_size))
         self.transform = nn.Sequential(
-            nn.Linear(bow_size, 1024),
-            nn.BatchNorm1d(1024),
+            nn.Linear(bow_size, 4096),
+            nn.BatchNorm1d(4096),
             nn.Sigmoid(),
         )
         self._ZeroShotTM = ZeroShotTM(bow_size=bow_size, contextual_size=contextual_size, 
@@ -125,7 +127,7 @@ class ZTM_word_embed(nn.Module):
 
         docvec = self.transform(word_dists)
         embeded = torch.cat((docvec, doc_embs), dim=1)
-        word_dists = torch.sigmoid(torch.matmul(embeded, self.word_embedding))
+        word_dists = torch.sigmoid(self.batch_norm((torch.matmul(embeded, self.word_embedding))))
         return word_dists
         
     def calculate_loss(self, pred, target):
