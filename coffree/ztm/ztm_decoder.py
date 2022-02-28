@@ -62,7 +62,7 @@ def evaluate_Decoder(config, model, data_loader):
 
     return results
 
-def train_model(decoder, config, train_loader, valid_loader, texts):
+def train_model(decoder, config, train_loader, valid_loader):
     # early stop settings 
     device = config["gpu"]
     stop_rounds = 300
@@ -130,7 +130,6 @@ def main():
 
     data_dict = get_process_data(config["dataset"])
 
-    raw_documens = data_dict["dataset"]["documents"]
     importance_score = data_dict["document_word_weight"]
     docvec = np.load("../../data/docvec_IMDB_SBERT_768d.npy")
 
@@ -161,7 +160,7 @@ def main():
         print("Model name error:{}".format(config["decoder"]))
         raise NotImplementedError
 
-    train_model(decoder, config, train_loader, valid_loader, raw_documens)
+    train_model(decoder, config, train_loader, valid_loader)
 
     print("Testing...")
     res = evaluate_Decoder(config, decoder, test_loader)
