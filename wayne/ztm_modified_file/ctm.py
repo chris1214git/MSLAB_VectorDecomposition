@@ -16,7 +16,7 @@ from contextualized_topic_models.utils.early_stopping.early_stopping import Earl
 from contextualized_topic_models.networks.decoding_network import DecoderNetwork
 ### casimir
 from contextualized_topic_models.evaluation.measures import CoherenceNPMI, TopicDiversity
-from utils.eval import retrieval_normalized_dcg_all, retrieval_precision_all
+from utils.eval import retrieval_normalized_dcg_all, retrieval_precision_all, semantic_precision_all
 ###
 
 
@@ -50,7 +50,7 @@ class CTM:
     def __init__(self, bow_size, contextual_size, inference_type="combined", n_components=10, model_type='prodLDA',
                  hidden_sizes=(100, 100), activation='softplus', dropout=0.2, learn_priors=True, batch_size=64,
                  lr=2e-3, momentum=0.99, solver='adam', num_epochs=100, reduce_on_plateau=False,
-                 num_data_loader_workers=mp.cpu_count(), label_size=0, loss_weights=None, config=None, texts=None, vocab = None, idx2token=None):
+                 num_data_loader_workers=mp.cpu_count(), label_size=0, loss_weights=None, config=None, texts=None, vocab = None, tp_vocab = None, word_embeddings=None, idx2token=None):
     ###
         self.device = (
                 torch.device("cuda")
@@ -104,7 +104,10 @@ class CTM:
         self.config = config
         self.texts = texts
         self.vocab = vocab
+        self.tp_vocab = tp_vocab
+        self.word_embeddings = word_embeddings
         self.idx2token = idx2token
+        self.distribution_cache = None
         ###
 
         if loss_weights:
@@ -196,12 +199,13 @@ class CTM:
 
         for batch_samples in loader:
             # batch_size x vocab_size
-            X_bow = batch_samples['X_bow']
+            batch_dict = batch_samples[0]
+            X_bow = batch_dict['X_bow']
             X_bow = X_bow.reshape(X_bow.shape[0], -1)
-            X_contextual = batch_samples['X_contextual']
+            X_contextual = batch_dict['X_contextual']
 
-            if "labels" in batch_samples.keys():
-                labels = batch_samples["labels"]
+            if "labels" in batch_dict.keys():
+                labels = batch_dict["labels"]
                 labels = labels.reshape(labels.shape[0], -1)
                 labels = labels.to(self.device)
             else:
@@ -359,7 +363,7 @@ class CTM:
             ###
 
         pbar.close()
-        self.training_doc_topic_distributions = self.get_doc_topic_distribution(train_dataset, n_samples)
+        # self.training_doc_topic_distributions = self.get_doc_topic_distribution(train_dataset, n_samples)
 
     def _validation(self, loader):
         """Validation epoch."""
@@ -371,14 +375,15 @@ class CTM:
         ###
         for batch_samples in loader:
             # batch_size x vocab_size
-            X_bow = batch_samples['X_bow']
+            batch_dict = batch_samples[0]
+            X_bow = batch_dict['X_bow']
             X_bow = X_bow.reshape(X_bow.shape[0], -1)
             ### casimir
-            X_contextual = batch_samples['X_contextual']
+            X_contextual = batch_dict['X_contextual']
             ###
 
-            if "labels" in batch_samples.keys():
-                labels = batch_samples["labels"]
+            if "labels" in batch_dict.keys():
+                labels = batch_dict["labels"]
                 labels = labels.to(self.device)
                 labels = labels.reshape(labels.shape[0], -1)
             else:
@@ -400,10 +405,15 @@ class CTM:
             ###
             
             ### casimir
+            # Semantic Prcision
+            precision_scores, word_result = semantic_precision_all(recon_dists, X_bow, self.word_embeddings, self.tp_vocab, k = [10, 30, 50], th = self.config['threshold'])
+            for k, v in precision_scores.items():
+                results['Semantic Precision@{}'.format(k)].append(v)
+                
             # Precision
             precision_scores = retrieval_precision_all(recon_dists, X_bow, k=[10, 30, 50])
             for k, v in precision_scores.items():
-                results['precision@{}'.format(k)].append(v)
+                results['Precision@{}'.format(k)].append(v)
 
             # NDCG
             ndcg_scores = retrieval_normalized_dcg_all(recon_dists, X_bow, k=[10, 30, 50])
@@ -441,12 +451,14 @@ class CTM:
             num_workers=self.num_data_loader_workers)
         self.model.eval()
         recon_dists = []
-        documents_lists = []
+        documents_lists = ()
         for batch_samples in loader:
             # batch_size x vocab_size
-            X_bow = batch_samples['X_bow']
+            batch_dict = batch_samples[0]
+            X_bow = batch_dict['X_bow']
             X_bow = X_bow.reshape(X_bow.shape[0], -1)
-            X_contextual = batch_samples['X_contextual']
+            X_contextual = batch_dict['X_contextual']
+            X_documents = batch_samples[1]
             labels = None
 
             if self.USE_CUDA:
@@ -466,9 +478,9 @@ class CTM:
             recon_dists.append(recon_dist)
 
             # raw documents list
-            documents_lists.append(batch_samples['documents'])
+            documents_lists = documents_lists + X_documents
 
-        return torch.cat(recon_dists, dim=0).cpu().detach().numpy(), torch.cat(documents_lists, dim=0).cpu()
+        return torch.cat(recon_dists, dim=0).cpu().detach().numpy(), documents_lists
     ###
     
     def get_thetas(self, dataset, n_samples=20):
@@ -489,6 +501,11 @@ class CTM:
         :param dataset: a PyTorch Dataset containing the documents
         :param n_samples: the number of sample to collect to estimate the final distribution (the more the better).
         """
+
+        ### casimir
+        if self.distribution_cache is not None:
+            return self.distribution_cache
+        ###
         self.model.eval()
 
         loader = DataLoader(
@@ -502,12 +519,13 @@ class CTM:
 
                 for batch_samples in loader:
                     # batch_size x vocab_size
-                    X_bow = batch_samples['X_bow']
+                    batch_dict = batch_samples[0]
+                    X_bow = batch_dict['X_bow']
                     X_bow = X_bow.reshape(X_bow.shape[0], -1)
-                    X_contextual = batch_samples['X_contextual']
+                    X_contextual = batch_dict['X_contextual']
 
-                    if "labels" in batch_samples.keys():
-                        labels = batch_samples["labels"]
+                    if "labels" in batch_dict.keys():
+                        labels = batch_dict["labels"]
                         labels = labels.to(self.device)
                         labels = labels.reshape(labels.shape[0], -1)
                     else:
@@ -526,7 +544,8 @@ class CTM:
 
                 final_thetas.append(np.array(collect_theta))
         pbar.close()
-        return np.sum(final_thetas, axis=0) / n_samples
+        self.distribution_cache = np.sum(final_thetas, axis=0) / n_samples
+        return self.distribution_cache
 
     def get_most_likely_topic(self, doc_topic_distribution):
         """ get the most likely topic for each document

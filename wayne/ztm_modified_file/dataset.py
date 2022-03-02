@@ -41,7 +41,7 @@ class CTMDataset(Dataset):
             X_contextual = torch.FloatTensor(self.X_contextual[i])
         ### casimir
         # (1) Add documents: self.war_documents.
-        return_dict = {'X_bow': X_bow, 'X_contextual': X_contextual, 'documents': self.raw_documents}
+        return_dict = {'X_bow': X_bow, 'X_contextual': X_contextual, }
         ###
         if self.labels is not None:
             labels = self.labels[i]
@@ -50,6 +50,6 @@ class CTMDataset(Dataset):
             else:
                 return_dict["labels"] = torch.FloatTensor(labels)
 
-        return return_dict
+        return return_dict, self.raw_documents[i]
 
 
