@@ -1,13 +1,42 @@
+import re
+import torch
 import numpy as np
-from sentence_transformers import SentenceTransformer
 import scipy.sparse
 import warnings
+from tqdm.auto import tqdm
+from sentence_transformers import SentenceTransformer
 from contextualized_topic_models.datasets.dataset import CTMDataset
 ### casimir
 # (1) import TfidfVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 ###
 from sklearn.preprocessing import OneHotEncoder
+
+def load_word2emb(embedding_file):
+    
+    word2embedding = dict()
+    word_dim = int(re.findall(r".(\d+)d", embedding_file)[0])
+
+    with open(embedding_file, "r") as f:
+        for line in tqdm(f):
+            line = line.strip().split()
+            word = line[0]
+            embedding = list(map(float, line[1:]))
+            word2embedding[word] = np.array(embedding)
+
+    print("Number of words:%d" % len(word2embedding))
+
+    return word2embedding
+
+def calculate_word_embeddings_tensor(word2embedding, tp):
+    word_embeddings = torch.zeros(len(tp.vocab), len(word2embedding['a']))
+    for k in tp.id2token:
+        if tp.id2token[k] not in word2embedding:
+            print('not found word embedding', tp.id2token[k])
+            continue
+        word_embeddings[k] = torch.tensor(word2embedding[tp.id2token[k]])
+
+    return word_embeddings
 
 def get_bag_of_words(data, min_length):
     """
