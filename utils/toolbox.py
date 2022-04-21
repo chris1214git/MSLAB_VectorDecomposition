@@ -1,14 +1,102 @@
 import os
+import re
+import nltk
 import torch
 import numpy as np
+from math import log
+from tqdm.auto import tqdm
+from sentence_transformers import SentenceTransformer
 from torch.utils.data import DataLoader, random_split
 
+sys.path.append("../")
+from utils.preprocessing import WhiteSpacePreprocessing
 
-def get_freer_gpu():
+def preprocess_document(raw_documents):
+    sp = WhiteSpacePreprocessing(raw_documents, stopwords_language='english')
+    preprocessed_documents, unpreprocessed_corpus, vocab, _ = sp.preprocess()
+    delete_non_eng_documents = delete_non_eng(preprocessed_documents)
+    noun_documents = pos(delete_non_eng_documents)
+    delete_documents = []
+    for idx in range(len(noun_documents)):
+        if len(noun_documents[idx]) == 0:
+            delete_documents.append(idx)
+    delete_documents = sorted(delete_documents, reverse=True)
+    for idx in delete_documents:
+        del unpreprocessed_corpus[idx]
+    noun_documents = list(filter(None, noun_documents))
+    # texts = [text.split() for text in noun_documents]
+    return noun_documents
+
+def generate_document_embedding(model, documents):
+    if model == 'roberta':
+        model = SentenceTransformer("paraphrase-distilroberta-base-v1", device=get_free_gpu())
+    else:
+        model = SentenceTransformer("all-mpnet-base-v2", device=get_free_gpu())
+
+    return np.array(model.encode(documents, show_progress_bar=True, batch_size=200))
+
+def tokenizer_eng(text):
+        text = re.sub(r'[^A-Za-z ]+', '', text)
+        text = text.strip().split()
+        return text
+
+def delete_non_eng(documents):
+    preprocessed_documents = []
+    for text in documents:
+        selected_word = []
+        for word in tokenizer_eng(text):
+            selected_word.append(word)
+        preprocessed_documents.append(" ".join(selected_word))
+    return preprocessed_documents
+
+
+def pos(documents):
+    is_noun = lambda pos: pos[:2] == 'NN'
+    is_verb = lambda pos: pos[:2] == 'VB'
+
+    preprocessed_documents = []
+    for text in documents:
+        tokenized = nltk.word_tokenize(text)
+        noun_word = []
+        for (word, pos) in nltk.pos_tag(tokenized):
+            if is_noun(pos) or is_verb(pos):
+                noun_word.append(word)
+        preprocessed_documents.append(" ".join(noun_word))
+    return preprocessed_documents
+
+def load_word2emb(embedding_file):
+    
+    word2embedding = dict()
+    word_dim = int(re.findall(r".(\d+)d", embedding_file)[0])
+
+    with open(embedding_file, "r") as f:
+        for line in tqdm(f):
+            line = line.strip().split()
+            word = line[0]
+            embedding = list(map(float, line[1:]))
+            word2embedding[word] = np.array(embedding)
+
+    # print("Number of words:%d" % len(word2embedding))
+
+    return word2embedding
+
+def calculate_word_embeddings_tensor(word2embedding, vocab, idx2token):
+    word_embeddings = torch.zeros(len(vocab), len(word2embedding['a']))
+    for k in idx2token:
+        if idx2token[k] not in word2embedding:
+            # print('not found word embedding', idx2token[k])
+            continue
+        word_embeddings[k] = torch.tensor(word2embedding[idx2token[k]])
+
+    return word_embeddings
+
+def get_free_gpu():
     os.system('nvidia-smi -q -d Memory |grep -A4 GPU|grep Free > tmp')
     memory_available = [int(x.split()[2])
                         for x in open('tmp', 'r').readlines()]
     os.system('rm -f tmp')
+    print('Using cuda {} for training...'.format(int(np.argmax(memory_available))))
+    torch.cuda.device(int(np.argmax(memory_available)))
     return "cuda:{}".format(int(np.argmax(memory_available)))
 
 
@@ -108,7 +196,7 @@ def generate_graph(doc_list, word2index, index2word):
     # pmi as weights
 
     num_window = len(windows)
-    count_mean = np.array(list(word_pair_count.values())).mean()
+    # count_mean = np.array(list(word_pair_count.values())).mean()
     for key in tqdm(word_pair_count, desc='Construct Edge: '):
         temp = key.split(',')
         i = int(temp[0])
@@ -122,11 +210,11 @@ def generate_graph(doc_list, word2index, index2word):
             continue
         row.append(i)
         col.append(j)
-        if count >= count_mean:
+        if count >= 15:
             edge.append([i, j])
             edge.append([j, i])
         weight.append(pmi)
 
-    print('# of Node: {}\n# of Edge: {}\nCount Mean: {}'.format(len(word2index), len(edge), count_mean))
+    print('# of Node: {}\n# of Edge: {}'.format(len(word2index), len(edge)))
 
     return edge

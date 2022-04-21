@@ -67,7 +67,21 @@ def load_document(dataset):
         documents = data["text"]
         target = data["label"]
         num_classes = 2
-
+    elif dataset == "agnews":
+        data = load_dataset("ag_news", split="train+test")
+        documents = data['text']
+        target = data["label"]
+        num_classes = 4
+    elif dataset == "wiki":
+        data = load_dataset("wikitext", 'wikitext-103-v1', split="train+test")
+        unprocessed_documents = data['text']
+        documents = []
+        for doc in unprocessed_documents:
+            if len(doc) > 0:
+                if doc[1] != '=':
+                    documents.append(doc)
+        target = []
+        num_classes = 0
     elif dataset == "MR":
         target = []
         documents = []

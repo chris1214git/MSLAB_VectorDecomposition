@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from collections import defaultdict
 from sklearn.linear_model import LogisticRegression
 
 
@@ -14,11 +15,9 @@ def retrieval_normalized_dcg_all(preds: torch.tensor, target: torch.tensor, k=No
     (1) preds: tensor with 2d shape
     (2) target: tensor with 2d shape
     (3) k: a list of integer, automated padding pred.shapes[1]
-
     Return:
     (1) ndcg_scores: dict
         key -> k, value -> average ndcg score
-
     """
     k = [preds.shape[-1]] if k is None else k + [preds.shape[-1]]
     
@@ -52,16 +51,13 @@ def retrieval_precision_all(preds, target, k = [10]):
     Note:
         select topk pred
         consider all positive target as ground truth
-
     Args:
     (1) preds: tensor with 2d shape
     (2) target: tensor with 2d shape
     (3) k: a list of integer
-
     Return:
     (1) precision_scores: dict
         key -> k, value -> average precision score
-
     """
     assert preds.shape == target.shape and max(k) <= preds.shape[-1]
     
@@ -79,6 +75,61 @@ def retrieval_precision_all(preds, target, k = [10]):
     
     return precision_scores
 
+def semantic_precision_all(preds, target, word_embeddings, tp_vocab, k = [10], th = 0.7, display_word_result=False):
+    """Computes `TopK precision`_ (for information retrieval).
+    Note:
+        select topk pred
+        consider all positive target as ground truth
+        one ground truth only count once
+
+    Args:
+    (1) preds: tensor with 2d shape
+    (2) target: tensor with 2d shape
+    (3) word_embeddings: word_embeddings matrix tensor with 2d shape(v, d)
+    (4) k: a list of integer
+    (5) th: threshold of word embeddings cosine similarity
+    (5) display_word_result: whether to display ground truth, prediction & hit words
+
+    Return:
+    (1) precision_scores: dict
+        key -> k, value -> average precision score
+
+    """
+    assert preds.shape == target.shape and max(k) <= preds.shape[-1]
+    # assert preds.shape[1] == word_embeddings.shape[0]
+    
+    if not isinstance(k, list):
+        print(k)
+        print(word_embeddings.shape)
+        raise ValueError("`k` has to be a list of positive integer")
+        
+    precision_scores = {}
+    target_onehot = target > 0
+    vocab = np.array(tp_vocab)
+    word_result = defaultdict(list)
+    
+    for topk in k:
+        relevants = []
+        for i in range(preds.shape[0]):
+            preds_word_emb = word_embeddings[preds[i].topk(topk)[1]]
+            target_word_emb = word_embeddings[target_onehot[i]]
+            
+            similarity_matrix = torch.zeros(preds_word_emb.shape[0], target_word_emb.shape[0])
+            for j in range(preds_word_emb.shape[0]):
+                similarity_matrix[j] = torch.nn.functional.cosine_similarity(preds_word_emb[j].view(1, -1), target_word_emb)
+                
+            max_similarity_score, max_similarity_idx = torch.max(similarity_matrix, dim=1)
+            max_similarity_idx = max_similarity_idx[max_similarity_score >= th]
+            relevant = len(torch.unique(max_similarity_idx)) / topk
+            relevants.append(relevant)
+            if topk == 10 and display_word_result:
+                word_result['ground truth'].append(vocab[target_onehot[i].cpu().numpy()])
+                word_result['prediction'].append(vocab[preds[i].topk(topk)[1].cpu().numpy()])
+                word_result['hit'].append(vocab[target_onehot[i].cpu().numpy()][max_similarity_idx.cpu().numpy()])
+                
+        precision_scores[topk] = np.mean(relevants)
+    
+    return precision_scores, word_result
 
 def evaluate_downstream(document_vectors, targets, train_dataset, test_dataset):
     # LR 
