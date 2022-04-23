@@ -63,9 +63,7 @@ if __name__ =='__main__':
     training_set, validation_set = random_split(dataset, lengths=[training_length, validation_length],generator=torch.Generator().manual_seed(42))
 
     # word embedding preparation
-    targets = labels[config['target']] 
-    word_embeddings = get_word_embs(vocabularys['tf-idf'])
-    word_embeddings.shape
+    word_embeddings = calculate_word_embeddings_tensor(load_word2emb("../data/glove.6B.300d.txt"), tp)
 
     # Define document embeddings dimension
     if config['encoder'] == 'doc2vec':
