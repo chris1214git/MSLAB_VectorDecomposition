@@ -15,30 +15,6 @@ from utils.preprocessing import WhiteSpacePreprocessing, WhiteSpacePreprocessing
 from utils.data_loader import load_document, load_word2emb
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-def preprocess_document(raw_documents):
-    sp = WhiteSpacePreprocessingStopwords(raw_documents, stopwords_list=['english'], vocabulary_size=10000, min_words=15)
-    preprocessed_documents, unpreprocessed_corpus, vocab, _ = sp.preprocess()
-    delete_non_eng_documents = delete_non_eng(preprocessed_documents)
-    noun_documents = pos(delete_non_eng_documents)
-    delete_documents = []
-    for idx in range(len(noun_documents)):
-        if len(noun_documents[idx]) == 0:
-            delete_documents.append(idx)
-    delete_documents = sorted(delete_documents, reverse=True)
-    for idx in delete_documents:
-        del unpreprocessed_corpus[idx]
-    noun_documents = list(filter(None, noun_documents))
-    texts = [text.split() for text in noun_documents]
-    return noun_documents, unpreprocessed_corpus, texts, vocab
-
-def generate_document_embedding(model, documents):
-    if model == 'roberta':
-        model = SentenceTransformer("paraphrase-distilroberta-base-v1", device=get_free_gpu())
-    else:
-        model = SentenceTransformer("all-mpnet-base-v2", device=get_free_gpu())
-
-    return np.array(model.encode(documents, show_progress_bar=True, batch_size=200))
-
 def tokenizer_eng(text):
         text = re.sub(r'[^A-Za-z ]+', '', text)
         text = text.strip().split()
@@ -107,7 +83,7 @@ def show_settings(config):
     print('-----------------------')
 
 def record_settings(config):
-    record = open('./'+config['model']+'_'+config['dataset']+'_'+config['target']+'.txt', 'a')
+    record = open('./'+config['dataset']+'_'+config['model']+'_'+config['target']+'.txt', 'a')
     record.write('-------- Info ---------\n')
     settings = ""
     for key in list(config.keys()):
