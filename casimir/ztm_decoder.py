@@ -6,14 +6,15 @@ import random
 import argparse
 import numpy as np
 from torch.utils.data import DataLoader, random_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+sys.path.append("../")
 from model.contextualized_topic_models.models.ctm import ZeroShotTM, CombinedTM
 from model.contextualized_topic_models.models.mlp import MLPDecoder
 from model.contextualized_topic_models.utils.data_preparation import TopicModelDataPreparation, calculate_word_embeddings_tensor, load_word2emb
-from model.contextualized_topic_models.utils.preprocessing import WhiteSpacePreprocessing
 from utils.data_loader import load_document
 from utils.toolbox import same_seeds, show_settings, preprocess_document
 
-sys.path.append("../")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 torch.set_num_threads(8)
 
@@ -21,7 +22,7 @@ if __name__ =='__main__':
     parser = argparse.ArgumentParser(description='document decomposition.')
     parser.add_argument('--model', type=str, default="ZTM")
     parser.add_argument('--version', type=str, default="our")
-    parser.add_argument('--dataset', type=str, default="20news")
+    parser.add_argument('--dataset', type=str, default="tweet")
     parser.add_argument('--encoder', type=str, default='SBERT')
     parser.add_argument('--target', type=str, default='tfidf')
     parser.add_argument('--topic_num', type=int, default=50)
@@ -43,10 +44,14 @@ if __name__ =='__main__':
     # data preprocessing
     raw_documents = load_document(config['dataset'])["documents"]
     preprocessed_corpus, unpreprocessed_corpus, text_for_doc2vec = preprocess_document(raw_documents)
+    vectorizer = TfidfVectorizer(token_pattern=r'(?u)\b[\w+|\-]+\b')
+    decode_target = vectorizer.fit_transform(preprocessed_corpus)
+    vocab = vectorizer.get_feature_names()
+    id2token = {k: v for k, v in zip(range(0, len(vocab)), vocab)}
 
     # prepare dataset
     tp = TopicModelDataPreparation(contextualized_model="paraphrase-distilroberta-base-v1", target=config['target'], encoder=config['encoder'])
-    dataset = tp.fit(text_for_contextual=unpreprocessed_corpus, text_for_bow=preprocessed_corpus, text_for_doc2vec=text_for_doc2vec)
+    dataset = tp.fit(text_for_contextual=unpreprocessed_corpus, text_for_bow=preprocessed_corpus, text_for_doc2vec=text_for_doc2vec, decode_target=decode_target, vocab=vocab, id2token=id2token)
     training_length = int(len(dataset) * config['ratio'])
     validation_length = len(dataset) - training_length
     training_set, validation_set = random_split(dataset, lengths=[training_length, validation_length],generator=torch.Generator().manual_seed(42))
