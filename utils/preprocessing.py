@@ -59,6 +59,60 @@ class WhiteSpacePreprocessing():
         return preprocessed_docs, unpreprocessed_docs, vocabulary, retained_indices
 
 
+class WhiteSpacePreprocessing_v2():
+    """
+    add min_df, max_df argument
+    Provides a very simple preprocessing script that filters infrequent tokens from text
+    """
+
+    def __init__(self, documents, stopwords_language="english", min_df=1, max_df=1.0, vocabulary_size=2000):
+        """
+
+        :param documents: list of strings
+        :param stopwords_language: string of the language of the stopwords (see nltk stopwords)
+        :param vocabulary_size: the number of most frequent words to include in the documents. Infrequent words will be discarded from the list of preprocessed documents
+        """
+        self.documents = documents
+        self.stopwords = set(stop_words.words(stopwords_language))
+        self.min_df = min_df
+        self.max_df = max_df
+        self.vocabulary_size = vocabulary_size
+
+    def preprocess(self):
+        """
+        Note that if after filtering some documents do not contain words we remove them. That is why we return also the
+        list of unpreprocessed documents.
+
+        :return: preprocessed documents, unpreprocessed documents and the vocabulary list
+        """
+        preprocessed_docs_tmp = self.documents
+        preprocessed_docs_tmp = [deaccent(doc.lower()) for doc in preprocessed_docs_tmp]
+        preprocessed_docs_tmp = [doc.translate(
+            str.maketrans(string.punctuation, ' ' * len(string.punctuation))) for doc in preprocessed_docs_tmp]
+        preprocessed_docs_tmp = [' '.join([w for w in doc.split() if len(w) > 0 and w not in self.stopwords])
+                                 for doc in preprocessed_docs_tmp]
+
+        vectorizer = CountVectorizer(min_df=self.min_df, max_df=self.max_df, max_features=self.vocabulary_size)
+        vectorizer.fit_transform(preprocessed_docs_tmp)
+        temp_vocabulary = set(vectorizer.get_feature_names())
+
+        preprocessed_docs_tmp = [' '.join([w for w in doc.split() if w in temp_vocabulary])
+                                 for doc in preprocessed_docs_tmp]
+
+        # the size of the preprocessed or unpreprocessed_docs might be less than given docs
+        # for that reason, we need to return retained indices to change the shape of given custom embeddings.
+        preprocessed_docs, unpreprocessed_docs, retained_indices = [], [], []
+        for i, doc in enumerate(preprocessed_docs_tmp):
+            if len(doc) > 0:
+                preprocessed_docs.append(doc)
+                unpreprocessed_docs.append(self.documents[i])
+                retained_indices.append(i)
+
+        vocabulary = list(set([item for doc in preprocessed_docs for item in doc.split()]))
+
+        return preprocessed_docs, unpreprocessed_docs, vocabulary, retained_indices
+
+
 class WhiteSpacePreprocessingStopwords():
     """
     Provides a very simple preprocessing script that filters infrequent tokens from text

@@ -7,10 +7,13 @@ import numpy as np
 from math import log
 from tqdm.auto import tqdm
 from sentence_transformers import SentenceTransformer
+from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 from torch.utils.data import DataLoader, random_split
 
 sys.path.append("../")
-from utils.preprocessing import WhiteSpacePreprocessing, WhiteSpacePreprocessingStopwords
+from utils.preprocessing import WhiteSpacePreprocessing, WhiteSpacePreprocessingStopwords, WhiteSpacePreprocessing_v2
+from utils.data_loader import load_document, load_word2emb
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 def preprocess_document(raw_documents):
     sp = WhiteSpacePreprocessingStopwords(raw_documents, stopwords_list=['english'], vocabulary_size=10000, min_words=15)
@@ -64,22 +67,6 @@ def pos(documents):
                 noun_word.append(word)
         preprocessed_documents.append(" ".join(noun_word))
     return preprocessed_documents
-
-def load_word2emb(embedding_file):
-    
-    word2embedding = dict()
-    word_dim = int(re.findall(r".(\d+)d", embedding_file)[0])
-
-    with open(embedding_file, "r") as f:
-        for line in tqdm(f):
-            line = line.strip().split()
-            word = line[0]
-            embedding = list(map(float, line[1:]))
-            word2embedding[word] = np.array(embedding)
-
-    # print("Number of words:%d" % len(word2embedding))
-
-    return word2embedding
 
 def calculate_word_embeddings_tensor(word2embedding, vocab, idx2token):
     word_embeddings = torch.zeros(len(vocab), len(word2embedding['a']))
@@ -227,3 +214,128 @@ def generate_graph(doc_list, word2index, index2word):
     print('# of Node: {}\n# of Edge: {}'.format(len(word2index), len(edge)))
 
     return edge
+
+def get_preprocess_document(dataset_name, min_df=1, max_df=1.0, vocabulary_size=None, min_doc_word=15, **kwargs):
+    '''
+    Returns preprocessed_docs & unpreprocessed_docs of the dataset
+
+            Parameters:
+                    dataset_name (str): For data_loader
+                    min_df, max_df, vocabulary_size: For CountVectorizer in CTM preprocess
+                    min_doc_word: Minimum doc length
+            Returns:
+                    unpreprocessed_docs (list):
+                    preprocessed_docs (list):
+    '''
+    print('Getting preprocess documents:', dataset_name)
+    print(f'min_df: {min_df} max_df: {max_df} vocabulary_size: {vocabulary_size} min_doc_word: {min_doc_word}')
+    raw_documents = load_document(dataset_name)["documents"]
+    # CTM preprocess
+    sp = WhiteSpacePreprocessing_v2(raw_documents, stopwords_language='english',\
+                                    min_df=min_df, max_df=max_df, vocabulary_size=vocabulary_size)
+
+    preprocessed_docs, unpreprocessed_docs, vocabulary, _ = sp.preprocess()
+    # filter special character
+    preprocessed_docs = delete_non_eng(preprocessed_docs)
+    # select nouns & verbs
+    preprocessed_docs = pos(preprocessed_docs)
+    # delete short articles
+    delete_docs_idx = []
+    for idx in range(len(preprocessed_docs)):
+        # length > min_doc_word
+        if len(preprocessed_docs[idx]) == 0 or len(preprocessed_docs[idx]) < min_doc_word:
+            delete_docs_idx.append(idx)
+    delete_docs_idx = sorted(delete_docs_idx, reverse=True)
+    for idx in delete_docs_idx:
+        del preprocessed_docs[idx]
+        del unpreprocessed_docs[idx]
+    
+    return unpreprocessed_docs ,preprocessed_docs
+
+def get_preprocess_document_labels(preprocessed_docs):
+    '''
+    Returns labels for document decoder
+
+            Parameters:
+                    preprocessed_docs (list): 
+            Returns:
+                    labels (dict): bow, tf-idf
+                    vocabulary (dict): bow, tf-idf
+    '''
+    print('Getting preprocess documents labels')
+    vectorizer = TfidfVectorizer()
+    # covert sparse matrix to numpy array
+    tf_idf_vector = vectorizer.fit_transform(preprocessed_docs).toarray()
+    bow_vector = tf_idf_vector.copy()
+    bow_vector[bow_vector > 0] = 1
+    bow_vector[bow_vector < 0] = 0
+    vocabulary = vectorizer.get_feature_names()
+
+    labels = {}
+    labels['tf-idf'] = tf_idf_vector
+    labels['bow'] = bow_vector
+    
+    vocabularys = {}
+    vocabularys['tf-idf'] = vocabulary
+    vocabularys['bow'] = vocabulary
+
+    return labels, vocabularys
+
+def get_preprocess_document_embs(preprocessed_docs, model_name):
+    '''
+    Returns embeddings(input) for document decoder
+
+            Parameters:
+                    preprocessed_docs (list): 
+                    model_name (str):
+            Returns:
+                    doc_embs (array): 
+                    model (class): 
+    '''
+    print('Getting preprocess documents embeddings')
+    if model_name == 'roberta':
+        model = SentenceTransformer("paraphrase-distilroberta-base-v1", device=get_free_gpu())
+        doc_embs = np.array(model.encode(preprocessed_docs, show_progress_bar=True, batch_size=200))
+    elif model_name == 'mpnet':
+        model = SentenceTransformer("all-mpnet-base-v2", device=get_free_gpu())
+        doc_embs = np.array(model.encode(preprocessed_docs, show_progress_bar=True, batch_size=200))
+    elif model_name == 'average':
+        model = SentenceTransformer("average_word_embeddings_glove.840B.300d", device=get_free_gpu())
+        doc_embs = np.array(model.encode(preprocessed_docs, show_progress_bar=True, batch_size=200))
+    elif model_name == 'doc2vec':
+        doc_embs = []
+        preprocessed_docs_split = [doc.split() for doc in preprocessed_docs]
+        documents = [TaggedDocument(doc, [i]) for i, doc in enumerate(preprocessed_docs_split)]
+        model = Doc2Vec(documents, vector_size=200, workers=4)
+        for idx in range(len(preprocessed_docs_split)):
+            doc_embs.append(model.infer_vector(preprocessed_docs_split[idx]))
+        doc_embs = np.array(doc_embs)
+
+    return doc_embs, model   
+
+def get_word_embs(vocabularys, word_emb_file='../data/glove.6B.300d.txt'):
+    '''
+    Returns word_embs array for semantic precision
+
+            Parameters:
+                    vocabularys (list): 
+                    word_emb_file (str): 
+            Returns:
+                    word_embs (array): 
+    '''
+    print('Getting word embeddings')
+    word2emb = load_word2emb(word_emb_file)
+    dim = len(list(word2emb.values())[0])
+
+    word_embs = []
+    for word in vocabularys:
+        if word not in word2emb:
+            emb = np.zeros(dim)
+        else:
+            emb = word2emb[word]
+        word_embs.append(emb) 
+
+    word_embs = np.array(word_embs)
+
+    return word_embs
+

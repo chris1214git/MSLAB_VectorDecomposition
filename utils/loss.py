@@ -49,7 +49,7 @@ def ListNet_nosoftmax(y_pred, y_true, eps=1e-10):
     return torch.mean(-torch.sum(true_smax * preds_log, dim=1))
 
 def MythNet(y_pred, y_true, eps=1e-10):
-	# ListNet switch softmax to L2 norm
+	# ListNet switch softmax to L1 norm
     # (1) y_pred: the decoded vector. 
     #     ex: tfidf score of each word in certain document.
     # (2) y_true: the vector before encoded. 
@@ -60,6 +60,24 @@ def MythNet(y_pred, y_true, eps=1e-10):
     #y_pred = torch.sigmoid(y_pred) 
     y_pred = torch.nn.functional.normalize(y_pred, dim=1, p=1)
     # y_true = torch.nn.functional.softmax(y_true, dim=1) 
+    y_true = torch.nn.functional.normalize(y_true, dim=1, p=1)
+    pred = y_pred + eps
+    pred_log = torch.log(pred)
+
+    return torch.mean(torch.sum(-y_true * pred_log, dim=1))
+
+def ListNet_sigmoid_L1(y_pred, y_true, eps=1e-10):
+    # ListNet switch softmax to L1 norm
+    # (1) y_pred: the decoded vector. 
+    #     ex: tfidf score of each word in certain document.
+    # (2) y_true: the vector before encoded. 
+    #     ex: same as above.
+    # (3) eps: a small number to avoid error when computing log operation. 
+    #     ex: log0 will cause error while log(0+eps) will not.
+
+    y_pred = torch.sigmoid(y_pred) 
+    y_pred = torch.nn.functional.normalize(y_pred, dim=1, p=1)
+    y_true = torch.sigmoid(y_true) 
     y_true = torch.nn.functional.normalize(y_true, dim=1, p=1)
     pred = y_pred + eps
     pred_log = torch.log(pred)
