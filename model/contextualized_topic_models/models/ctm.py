@@ -53,7 +53,7 @@ class CTM:
     def __init__(self, bow_size, contextual_size, inference_type="combined", n_components=10, model_type='prodLDA',
                  hidden_sizes=(100, 100), activation='softplus', dropout=0.2, learn_priors=True, batch_size=64,
                  lr=2e-3, momentum=0.99, solver='adam', num_epochs=100, reduce_on_plateau=False,
-                 num_data_loader_workers=mp.cpu_count(), label_size=0, loss_weights=None, config=None, texts=None, vocab = None, tp_vocab = None, word_embeddings=None, idx2token=None):
+                 num_data_loader_workers=mp.cpu_count(), label_size=0, loss_weights=None, config=None, texts=None, tp_vocab = None, word_embeddings=None, idx2token=None):
     ###
         self.device = (
                 torch.device("cuda")
@@ -106,7 +106,6 @@ class CTM:
         ### casimir
         self.config = config
         self.texts = texts
-        self.vocab = vocab
         self.tp_vocab = tp_vocab
         self.word_embeddings = word_embeddings
         self.idx2token = idx2token
@@ -121,7 +120,7 @@ class CTM:
         ### casimir
         self.model = DecoderNetwork(
             bow_size, self.contextual_size, inference_type, n_components, model_type, hidden_sizes, activation,
-            dropout, learn_priors, label_size=label_size, vocab_size=len(vocab), word_embedding = word_embeddings)
+            dropout, learn_priors, label_size=label_size, vocab_size=len(tp_vocab), word_embedding = word_embeddings)
         ### 
 
         self.early_stopping = None
@@ -356,7 +355,7 @@ class CTM:
                 val_res, dist_res = self._predict(validation_loader)
                 npmi = CoherenceNPMI(texts=self.texts, topics=self.get_topic_lists(10))
                 diversity = InvertedRBO(topics=self.get_topic_lists(10))
-                record = open('./'+self.config['model']+'_'+self.config['dataset']+'_'+self.config['target']+'.txt', 'a')
+                record = open('./'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['target']+'.txt', 'a')
                 print('---------------------------------------')
                 record.write('-------------------------------------------------\n')
                 print('EPOCH', epoch + 1)

@@ -109,7 +109,7 @@ class TopicModelDataPreparation:
     def stemmed_words(self, doc):
         return (self.stemmer.stem(w) for w in self.tfidf_analyzer(doc))
 
-    def fit(self, text_for_contextual, text_for_bow, text_for_doc2vec, decode_target, vocab, id2token, labels=None, custom_embeddings=None):
+    def fit(self, text_for_contextual, text_for_bow, decode_target, vocab, id2token, labels=None, custom_embeddings=None):
         """
         This method fits the vectorizer and gets the embeddings from the contextual model
 
@@ -149,15 +149,16 @@ class TopicModelDataPreparation:
         train_bow_embeddings = decode_target
         ###
         if custom_embeddings is None:
-            if self.encoder == 'doc2vec':
-                ## doc2vec embedding
-                train_contextualized_embeddings = doc2vec_embeddings_from_list(text_for_doc2vec)
-            elif self.encoder == 'average':
-                ## average word embedding
-                train_contextualized_embeddings = average_embeddings_from_list(text_for_bow)
-            else:
-                ## SBERT embedding
-                train_contextualized_embeddings = bert_embeddings_from_list(text_for_bow, self.contextualized_model)
+            # if self.encoder == 'doc2vec':
+            #     ## doc2vec embedding
+            #     train_contextualized_embeddings = doc2vec_embeddings_from_list(text_for_doc2vec)
+            # elif self.encoder == 'average':
+            #     ## average word embedding
+            #     train_contextualized_embeddings = average_embeddings_from_list(text_for_bow)
+            # else:
+            #     ## SBERT embedding
+            #     train_contextualized_embeddings = bert_embeddings_from_list(text_for_bow, self.contextualized_model)
+            train_contextualized_embeddings = self.contextualized_model
         else:
             train_contextualized_embeddings = custom_embeddings
         ### casimir
