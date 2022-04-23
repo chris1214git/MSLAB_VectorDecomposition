@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import nltk
 import torch
 import numpy as np
@@ -9,10 +10,10 @@ from sentence_transformers import SentenceTransformer
 from torch.utils.data import DataLoader, random_split
 
 sys.path.append("../")
-from utils.preprocessing import WhiteSpacePreprocessing
+from utils.preprocessing import WhiteSpacePreprocessing, WhiteSpacePreprocessingStopwords
 
 def preprocess_document(raw_documents):
-    sp = WhiteSpacePreprocessing(raw_documents, stopwords_language='english')
+    sp = WhiteSpacePreprocessingStopwords(raw_documents, stopwords_list=['english'], vocabulary_size=10000, min_words=15)
     preprocessed_documents, unpreprocessed_corpus, vocab, _ = sp.preprocess()
     delete_non_eng_documents = delete_non_eng(preprocessed_documents)
     noun_documents = pos(delete_non_eng_documents)
@@ -24,8 +25,8 @@ def preprocess_document(raw_documents):
     for idx in delete_documents:
         del unpreprocessed_corpus[idx]
     noun_documents = list(filter(None, noun_documents))
-    # texts = [text.split() for text in noun_documents]
-    return noun_documents
+    texts = [text.split() for text in noun_documents]
+    return noun_documents, unpreprocessed_corpus, texts, vocab
 
 def generate_document_embedding(model, documents):
     if model == 'roberta':
@@ -118,6 +119,14 @@ def show_settings(config):
     print(settings)
     print('-----------------------')
 
+def record_settings(config):
+    record = open('./'+config['model']+'_'+config['dataset']+'_'+config['target']+'.txt', 'a')
+    record.write('-------- Info ---------\n')
+    settings = ""
+    for key in list(config.keys()):
+        settings += "{}: {}\n".format(key, config.get(key))
+    record.write(settings)
+    record.write('-----------------------\n')
 
 def split_data(dataset, config):
     train_length = int(len(dataset)*0.6)

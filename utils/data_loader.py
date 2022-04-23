@@ -82,6 +82,11 @@ def load_document(dataset):
                     documents.append(doc)
         target = []
         num_classes = 0
+    elif dataset == "tweet":
+        data = load_dataset("tweet_eval", "emotion", split="train+test")
+        documents = data["text"]
+        target = data["label"]
+        num_classes = 4
     elif dataset == "MR":
         target = []
         documents = []
