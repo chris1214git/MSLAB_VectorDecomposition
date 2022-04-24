@@ -107,7 +107,7 @@ if __name__ =='__main__':
             target_rank_list[i] = np.argsort(target_list[i])[::-1]
 
         # show info
-        record = open('./'+config['dataset']+config['model']+'_'+'_'+config['target']+'_document.txt', 'a')
+        record = open('./'+config['dataset']+'_'+config['model']+'_'+config['encoder']+'_'+config['target']+'_document.txt', 'a')
         doc_idx = random.randint(0, len(recon_list))
         doc_topics_distribution = model.get_doc_topic_distribution(validation_set)
         doc_topics = model.get_topic_lists()[np.argmax(doc_topics_distribution[doc_idx])]

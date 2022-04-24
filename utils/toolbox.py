@@ -107,7 +107,7 @@ def show_settings(config):
     print('-----------------------')
 
 def record_settings(config):
-    record = open('./'+config['model']+'_'+config['dataset']+'_'+config['target']+'.txt', 'a')
+    record = open('./'+config['dataset']+'_'+config['model']+'_'+config['encoder']+'_'+config['target']+'.txt', 'a')
     record.write('-------- Info ---------\n')
     settings = ""
     for key in list(config.keys()):
