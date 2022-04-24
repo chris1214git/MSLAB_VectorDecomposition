@@ -61,7 +61,7 @@ if __name__ =='__main__':
 
     # prepare dataset
     tp = TopicModelDataPreparation(contextualized_model=doc_embs, target=config['target'])
-    dataset = tp.fit(text_for_contextual=unpreprocessed_corpus, text_for_bow=preprocessed_corpus, decode_target=labels[config['target']], vocab=vocabularys[config['target']], id2token=id2token)
+    dataset = tp.fit(text_for_contextual=unpreprocessed_corpus, text_for_bow=preprocessed_corpus, text_for_doc2vec=texts, decode_target=labels[config['target']], vocab=vocabularys[config['target']], id2token=id2token)
     training_length = int(len(dataset) * config['ratio'])
     validation_length = len(dataset) - training_length
     training_set, validation_set = random_split(dataset, lengths=[training_length, validation_length],generator=torch.Generator().manual_seed(42))
