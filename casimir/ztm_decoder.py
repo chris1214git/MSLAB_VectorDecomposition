@@ -55,6 +55,7 @@ if __name__ =='__main__':
 
     # Decode target & Vocabulary
     labels, vocabularys, id2token = get_preprocess_document_labels(preprocessed_corpus)
+    id2token = {k: v for k, v in zip(range(0, len(vocabularys[config['target']])), vocabularys[config['target']])}
 
     # prepare dataset
     tp = TopicModelDataPreparation(contextualized_model=doc_embs, target=config['target'])
