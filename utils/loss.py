@@ -77,7 +77,7 @@ def ListNet_sigmoid_L1(y_pred, y_true, eps=1e-10):
 
     y_pred = torch.sigmoid(y_pred) 
     y_pred = torch.nn.functional.normalize(y_pred, dim=1, p=1)
-    y_true = torch.sigmoid(y_true) 
+    
     y_true = torch.nn.functional.normalize(y_true, dim=1, p=1)
     pred = y_pred + eps
     pred_log = torch.log(pred)
@@ -180,6 +180,7 @@ def MultiLabelMarginLossCustom(y_pred, y_true_rank, fixed_topk=50, alpha=1):
     alpha -> magnitude of positive pairs compared to negative pairs, since normally negative pairs are 100 times more than positive pairs
     """
     device = y_pred.device    
+    print(y_true_rank)
     y_pos_id = y_true_rank[:, :fixed_topk]
     y_neg_id = y_true_rank[:, fixed_topk:]
 

@@ -252,7 +252,7 @@ def get_preprocess_document(dataset_name, min_df=1, max_df=1.0, vocabulary_size=
     
     return unpreprocessed_docs ,preprocessed_docs
 
-def get_preprocess_document_labels(preprocessed_docs):
+def get_preprocess_document_labels(preprocessed_docs, preprocess_config='../chris/parameters/preprocess_config.json'):
     '''
     Returns labels for document decoder
 

@@ -145,3 +145,33 @@ def evaluate_downstream(document_vectors, targets, train_dataset, test_dataset):
     valid_acc = np.mean(preds == test_y)
     
     return valid_acc
+
+def precision_recall_f1_all(preds, target):
+    """Computes precision, recall, f1 for binary target    
+    Args:
+    (1) preds: tensor with 2d shape, raw output
+    (2) target: tensor with 2d shape, multi-hot vector
+    Return:
+    (1) ndcg_scores: dict
+        key -> k, value -> average ndcg score
+    """
+    preds = torch.sigmoid(preds)
+    # binarize prediction
+    pred_b = (preds >= 0.5).float()
+    target_b = target
+    hit_num = torch.sum((pred_b == 1) & (target_b == 1), axis=1)
+    gt_num = torch.sum((target_b == 1), axis=1)
+    pred_num = torch.sum((pred_b == 1), axis=1)
+
+    precision = hit_num / pred_num
+    recall = hit_num / gt_num
+    f1 = 2 * precision * recall / (precision + recall)
+    precision = torch.nan_to_num(precision, nan=0)
+    recall = torch.nan_to_num(recall, nan=0)
+    f1 = torch.nan_to_num(f1, nan=0)
+
+    precision = torch.mean(precision).cpu().item()
+    recall = torch.mean(recall).cpu().item()
+    f1 = torch.mean(f1).cpu().item()
+
+    return precision, recall, f1 
