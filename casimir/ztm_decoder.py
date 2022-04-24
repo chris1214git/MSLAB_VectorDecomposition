@@ -1,6 +1,7 @@
 import os
 import sys
 import nltk
+import time
 import torch
 import random
 import argparse
@@ -74,13 +75,20 @@ if __name__ =='__main__':
         contextual_size = 768
     
     # build model & training
-    if config['model'] == 'CombinedTM':
-        model = CombinedTM(bow_size=len(tp.vocab), contextual_size=contextual_size, n_components=config['topic_num'], num_epochs=config['epochs'], config=config, texts=texts, tp_vocab = tp.vocab, word_embeddings=word_embeddings, idx2token=dataset.idx2token)
-    elif config['model'] == 'mlp':
-        model = MLPDecoder(bow_size=len(tp.vocab), contextual_size=contextual_size, num_epochs=config['epochs'], config=config, texts=texts,tp_vocab = tp.vocab, word_embeddings=word_embeddings, idx2token=dataset.idx2token)
-    else:
-        model = ZeroShotTM(bow_size=len(tp.vocab), contextual_size=contextual_size, n_components=config['topic_num'], num_epochs=config['epochs'], config=config, texts=texts, tp_vocab = tp.vocab, word_embeddings=word_embeddings, idx2token=dataset.idx2token)
-    model.fit(training_set, validation_set)
+    while True:
+        try:
+            if config['model'] == 'CombinedTM':
+                model = CombinedTM(bow_size=len(tp.vocab), contextual_size=contextual_size, n_components=config['topic_num'], num_epochs=config['epochs'], config=config, texts=texts, tp_vocab = tp.vocab, word_embeddings=word_embeddings, idx2token=dataset.idx2token)
+            elif config['model'] == 'mlp':
+                model = MLPDecoder(bow_size=len(tp.vocab), contextual_size=contextual_size, num_epochs=config['epochs'], config=config, texts=texts,tp_vocab = tp.vocab, word_embeddings=word_embeddings, idx2token=dataset.idx2token)
+            else:
+                model = ZeroShotTM(bow_size=len(tp.vocab), contextual_size=contextual_size, n_components=config['topic_num'], num_epochs=config['epochs'], config=config, texts=texts, tp_vocab = tp.vocab, word_embeddings=word_embeddings, idx2token=dataset.idx2token)
+            model.fit(training_set, validation_set)
+            break
+        except:
+            print("[Error] Memory not enough, ")
+            time.sleep(15)
+
 
     # visualize documents
     check_nums = config['check_nums']
