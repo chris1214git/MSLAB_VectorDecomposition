@@ -56,7 +56,7 @@ if __name__ =='__main__':
     doc_embs, doc_model = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
 
     # Decode target & Vocabulary
-    labels, vocabularys, id2token = get_preprocess_document_labels(preprocessed_corpus)
+    labels, vocabularys= get_preprocess_document_labels(preprocessed_corpus)
     id2token = {k: v for k, v in zip(range(0, len(vocabularys[config['target']])), vocabularys[config['target']])}
 
     # prepare dataset
