@@ -23,6 +23,7 @@ if __name__ =='__main__':
     parser = argparse.ArgumentParser(description='document decomposition.')
     parser.add_argument('--model', type=str, default="ZTM")
     parser.add_argument('--dataset', type=str, default="20news")
+    parser.add_argument('--dataset_name', type=str, default="20news")
     parser.add_argument('--min_df', type=int, default=1)
     parser.add_argument('--mxa_df', type=float, default=1.0)
     parser.add_argument('--vocabulary_size', type=int, default=8000)
@@ -42,6 +43,7 @@ if __name__ =='__main__':
     args = parser.parse_args()
     
     config = vars(args)
+    config["dataset_name"] = config["dataset"]
     show_settings(config)
     record_settings(config)
     same_seeds(config["seed"])
