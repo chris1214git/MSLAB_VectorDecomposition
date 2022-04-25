@@ -26,7 +26,7 @@ if __name__ =='__main__':
     parser.add_argument('--dataset_name', type=str, default="20news")
     parser.add_argument('--min_df', type=int, default=1)
     parser.add_argument('--mxa_df', type=float, default=1.0)
-    parser.add_argument('--vocabulary_size', type=int, default=8000)
+    parser.add_argument('--vocabulary_size', type=int, default=1000)
     parser.add_argument('--min_doc_word', type=int, default=15)
     parser.add_argument('--encoder', type=str, default='roberta')
     parser.add_argument('--target', type=str, default='tf-idf')
@@ -37,7 +37,7 @@ if __name__ =='__main__':
     parser.add_argument('--topk', type=int, nargs='+', default=[5, 10, 15])
     parser.add_argument('--save', type=bool, default=False)
     parser.add_argument('--threshold', type=float, default=0.5)
-    parser.add_argument('--check_document', type=bool, default=False)
+    parser.add_argument('--check_document', type=bool, default=True)
     parser.add_argument('--check_auto', type=bool, default=True)
     parser.add_argument('--check_nums', type=int, default=500)
     args = parser.parse_args()
@@ -81,21 +81,25 @@ if __name__ =='__main__':
     while True:
         try:
             if config['model'] == 'CombinedTM':
-                model = CombinedTM(bow_size=len(tp.vocab), contextual_size=contextual_size, n_components=config['topic_num'], num_epochs=config['epochs'], config=config, texts=texts, tp_vocab = tp.vocab, word_embeddings=word_embeddings, idx2token=dataset.idx2token)
+                model = CombinedTM(bow_size=len(tp.vocab), contextual_size=contextual_size, n_components=config['topic_num'], num_epochs=config['epochs'], config=config, texts=texts, vocab = tp.vocab, word_embeddings=word_embeddings, idx2token=dataset.idx2token)
             elif config['model'] == 'mlp':
-                model = MLPDecoder(bow_size=len(tp.vocab), contextual_size=contextual_size, num_epochs=config['epochs'], config=config, texts=texts,tp_vocab = tp.vocab, word_embeddings=word_embeddings, idx2token=dataset.idx2token)
+                model = MLPDecoder(bow_size=len(tp.vocab), contextual_size=contextual_size, num_epochs=config['epochs'], config=config, texts=texts,vocab = tp.vocab, word_embeddings=word_embeddings, idx2token=dataset.idx2token)
             else:
-                model = ZeroShotTM(bow_size=len(tp.vocab), contextual_size=contextual_size, n_components=config['topic_num'], num_epochs=config['epochs'], config=config, texts=texts, tp_vocab = tp.vocab, word_embeddings=word_embeddings, idx2token=dataset.idx2token)
+                model = ZeroShotTM(bow_size=len(tp.vocab), contextual_size=contextual_size, n_components=config['topic_num'], num_epochs=config['epochs'], config=config, texts=texts, vocab = tp.vocab, word_embeddings=word_embeddings, idx2token=dataset.idx2token)
             model.fit(training_set, validation_set)
-            break
         except:
-            print("[Error] Memory not enough, ")
+            print('[Error] Memory Insufficient, retry after 15 secondes.')
             time.sleep(15)
 
-
+    # Pre-Define Document to check
+    if config['dataset'] == 'agnews':
+        print('[Error]')
+    elif config['dataset'] == '20news':
+        print('[Error]')
+    elif config['dataset'] == 'tweet':
+        doc_idx = [654, 194, 352, 178, 251, 385, 804, 782, 834, 627, 114, 345, 203, 592, 131, 534, 340, 716, 531, 70, 71, 117, 373, 543, 469, 409, 777, 486, 614, 38, 729, 736, 455, 840, 591, 106, 72, 468, 713, 173, 682, 199, 767, 103, 308, 477, 793, 468, 645, 673, 484, 733, 262, 339, 368, 110, 754, 254, 140, 232, 617, 344, 14, 375, 649, 134, 732, 298, 320, 134, 576, 32, 349, 576, 312, 310, 725, 510, 139, 731, 75, 821, 471, 762, 707, 755, 773, 219, 475, 277, 716, 66, 611, 280, 735, 829, 17, 28, 423, 341, 438, 235, 828, 54, 76, 392, 290, 705, 518, 448, 144, 355, 14, 459, 95, 264, 703, 274, 363, 391, 488, 446, 324, 91, 178, 238, 68, 70, 525, 323, 169, 79, 49, 29, 25, 722, 393, 746, 709, 806, 335, 308, 562, 447, 227, 710, 301, 291, 411, 846, 631, 564, 457, 358, 470, 26, 203, 225, 135, 75, 750, 818, 450, 332, 9, 249, 256, 847, 420, 353, 528, 518, 808, 565, 557, 619, 56, 719, 815, 558, 162, 527, 408, 301, 767, 134, 95, 109, 619, 580, 320, 483, 205, 324, 153, 261, 348, 78, 372, 12]
     # visualize documents
-    check_nums = config['check_nums']
-    while config['check_document']:
+    for idx in doc_idx:
         # get recontruct result
         recon_list, target_list, doc_list = model.get_reconstruct(validation_set)
 
@@ -108,13 +112,12 @@ if __name__ =='__main__':
 
         # show info
         record = open('./'+config['dataset']+'_'+config['model']+'_'+config['encoder']+'_'+config['target']+'_document.txt', 'a')
-        doc_idx = random.randint(0, len(recon_list))
         doc_topics_distribution = model.get_doc_topic_distribution(validation_set)
-        doc_topics = model.get_topic_lists()[np.argmax(doc_topics_distribution[doc_idx])]
-        print('Documents ', doc_idx)
-        record.write('Documents '+str(doc_idx)+'\n')
-        print(doc_list[doc_idx])
-        record.write(doc_list[doc_idx])
+        doc_topics = model.get_topic_lists()[np.argmax(doc_topics_distribution[idx])]
+        print('Documents ', idx)
+        record.write('Documents '+str(idx)+'\n')
+        print(doc_list[idx])
+        record.write(doc_list[idx])
         print('---------------------------------------')
         record.write('\n---------------------------------------\n')
         print('Topic of Document: ')
@@ -126,15 +129,15 @@ if __name__ =='__main__':
         print('[Predict] Top 10 Words in Document: ')
         record.write('[Predict] Top 10 Words in Document: \n')
         for idx in range(10):
-            print(dataset.idx2token[recon_rank_list[doc_idx][idx]])
-            record.write(str(dataset.idx2token[recon_rank_list[doc_idx][idx]])+'\n')
+            print(dataset.idx2token[recon_rank_list[idx][idx]])
+            record.write(str(dataset.idx2token[recon_rank_list[idx][idx]])+'\n')
         print('---------------------------------------')
         record.write('---------------------------------------\n')
         print('[Label] Top 10 Words in Document: ')
         record.write('[Label] Top 10 Words in Document: \n')
         for idx in range(10):
-            print(dataset.idx2token[target_rank_list[doc_idx][idx]])
-            record.write(str(dataset.idx2token[target_rank_list[doc_idx][idx]])+'\n')
+            print(dataset.idx2token[target_rank_list[idx][idx]])
+            record.write(str(dataset.idx2token[target_rank_list[idx][idx]])+'\n')
         print('---------------------------------------\n')
         record.write('---------------------------------------\n\n')
         print('Press any key to continue / exit [e]')

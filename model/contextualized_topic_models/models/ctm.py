@@ -53,7 +53,7 @@ class CTM:
     def __init__(self, bow_size, contextual_size, inference_type="combined", n_components=10, model_type='prodLDA',
                  hidden_sizes=(100, 100), activation='softplus', dropout=0.2, learn_priors=True, batch_size=64,
                  lr=2e-3, momentum=0.99, solver='adam', num_epochs=100, reduce_on_plateau=False,
-                 num_data_loader_workers=mp.cpu_count(), label_size=0, loss_weights=None, config=None, texts=None, vocab = None, tp_vocab = None, word_embeddings=None, idx2token=None):
+                 num_data_loader_workers=mp.cpu_count(), label_size=0, loss_weights=None, config=None, texts=None, vocab = None, word_embeddings=None, idx2token=None):
     ###
         self.device = (
                 torch.device("cuda")
@@ -107,7 +107,6 @@ class CTM:
         self.config = config
         self.texts = texts
         self.vocab = vocab
-        self.tp_vocab = tp_vocab
         self.word_embeddings = word_embeddings
         self.idx2token = idx2token
         self.distribution_cache = None
@@ -449,7 +448,7 @@ class CTM:
                               posterior_mean, posterior_variance, posterior_log_variance, recon_dists)
             
             # Semantic Prcision for reconstruct
-            precision_scores, word_result = semantic_precision_all(recon_dists, X_bow, self.word_embeddings, self.tp_vocab, k=self.config['topk'], th = self.config['threshold'])
+            precision_scores, word_result = semantic_precision_all(recon_dists, X_bow, self.word_embeddings, self.vocab, k=self.config['topk'], th = self.config['threshold'])
             for k, v in precision_scores.items():
                 results['[Recon] Semantic Precision@{}'.format(k)].append(v)
                 
@@ -464,7 +463,7 @@ class CTM:
                 results['[Recon] ndcg@{}'.format(k)].append(v)
 
             # Semantic Prcision for word dist
-            precision_scores, word_result = semantic_precision_all(word_dists, X_bow, self.word_embeddings, self.tp_vocab, k=self.config['topk'], th = self.config['threshold'])
+            precision_scores, word_result = semantic_precision_all(word_dists, X_bow, self.word_embeddings, self.vocab, k=self.config['topk'], th = self.config['threshold'])
             for k, v in precision_scores.items():
                 dists['[Word Dist] Semantic Precision@{}'.format(k)].append(v)
                 
