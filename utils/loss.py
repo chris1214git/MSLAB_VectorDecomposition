@@ -43,10 +43,10 @@ def ListNet_nosoftmax(y_pred, y_true, eps=1e-10):
     # preds_smax = F.softmax(y_pred, dim=1)
     # true_smax = F.softmax(y_true, dim=1)
 
-    preds_smax = preds_smax + eps
-    preds_log = torch.log(preds_smax)
+    y_pred = y_pred + eps
+    pred_log = torch.log(y_pred)
 
-    return torch.mean(-torch.sum(true_smax * preds_log, dim=1))
+    return torch.mean(-torch.sum(y_true * pres_log, dim=1))
 
 def MythNet(y_pred, y_true, eps=1e-10):
 	# ListNet switch softmax to L1 norm

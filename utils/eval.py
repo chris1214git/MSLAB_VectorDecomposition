@@ -116,7 +116,7 @@ def semantic_precision_all(preds, target, word_embeddings, tp_vocab, k = [10], t
             
             similarity_matrix = torch.zeros(preds_word_emb.shape[0], target_word_emb.shape[0])
             for j in range(preds_word_emb.shape[0]):
-                similarity_matrix[j] = torch.nn.functional.cosine_similarity(preds_word_emb[j].view(1, -1), target_word_emb)
+                similarity_matrix[j] = torch.nn.functional.cosine_similarity(torch.from_numpy(preds_word_emb[j]).view(1, -1), torch.from_numpy(target_word_emb))
                 
             max_similarity_score, max_similarity_idx = torch.max(similarity_matrix, dim=1)
             max_similarity_idx = max_similarity_idx[max_similarity_score >= th]

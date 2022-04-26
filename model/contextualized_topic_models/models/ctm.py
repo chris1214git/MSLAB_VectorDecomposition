@@ -19,7 +19,7 @@ from contextualized_topic_models.networks.decoding_network import DecoderNetwork
 ### casimir
 from contextualized_topic_models.evaluation.measures import CoherenceNPMI, TopicDiversity, InvertedRBO
 from utils.eval import retrieval_normalized_dcg_all, retrieval_precision_all, semantic_precision_all
-from utils.toolbox import record_settings
+from utils.toolbox import get_free_gpu, record_settings
 ###
 
 
@@ -55,11 +55,7 @@ class CTM:
                  lr=2e-3, momentum=0.99, solver='adam', num_epochs=100, reduce_on_plateau=False,
                  num_data_loader_workers=mp.cpu_count(), label_size=0, loss_weights=None, config=None, texts=None, vocab = None, word_embeddings=None, idx2token=None):
     ###
-        self.device = (
-                torch.device("cuda")
-                if torch.cuda.is_available()
-                else torch.device("cpu")
-            )
+        self.device = get_free_gpu()
 
         if self.__class__.__name__ == "CTM":
             raise Exception("You cannot call this class. Use ZeroShotTM or CombinedTM")
