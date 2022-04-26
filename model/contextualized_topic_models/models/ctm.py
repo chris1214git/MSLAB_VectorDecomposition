@@ -55,7 +55,11 @@ class CTM:
                  lr=2e-3, momentum=0.99, solver='adam', num_epochs=100, reduce_on_plateau=False,
                  num_data_loader_workers=mp.cpu_count(), label_size=0, loss_weights=None, config=None, texts=None, vocab = None, word_embeddings=None, idx2token=None):
     ###
-        self.device = get_free_gpu()
+        if torch.cuda.is_available():
+            self.device = get_free_gpu()
+        else:
+            self.device = torch.device("cpu")
+
 
         if self.__class__.__name__ == "CTM":
             raise Exception("You cannot call this class. Use ZeroShotTM or CombinedTM")
@@ -217,8 +221,8 @@ class CTM:
                 labels = None
 
             if self.USE_CUDA:
-                X_bow = X_bow.cuda()
-                X_contextual = X_contextual.cuda()
+                X_bow = X_bow.to(self.device)
+                X_contextual = X_contextual.to(self.device)
 
             # forward pass
             self.model.zero_grad()
@@ -391,8 +395,8 @@ class CTM:
                 labels = None
 
             if self.USE_CUDA:
-                X_bow = X_bow.cuda()
-                X_contextual = X_contextual.cuda()
+                X_bow = X_bow.to(self.device)
+                X_contextual = X_contextual.to(self.device)
 
             # forward pass
             self.model.zero_grad()
@@ -431,8 +435,8 @@ class CTM:
             X_contextual = batch_dict['X_contextual']
 
             if self.USE_CUDA:
-                X_bow = X_bow.cuda()
-                X_contextual = X_contextual.cuda()
+                X_bow = X_bow.to(self.device)
+                X_contextual = X_contextual.to(self.device)
 
             # forward pass
             self.model.zero_grad()
@@ -504,8 +508,8 @@ class CTM:
             bow_lists.append(X_bow)
 
             if self.USE_CUDA:
-                X_bow = X_bow.cuda()
-                X_contextual = X_contextual.cuda()
+                X_bow = X_bow.to(self.device)
+                X_contextual = X_contextual.to(self.device)
 
             # forward pass
             self.model.zero_grad()
@@ -573,8 +577,8 @@ class CTM:
                         labels = None
 
                     if self.USE_CUDA:
-                        X_bow = X_bow.cuda()
-                        X_contextual = X_contextual.cuda()
+                        X_bow = X_bow.to(self.device)
+                        X_contextual = X_contextual.to(self.device)
 
                     # forward pass
                     self.model.zero_grad()

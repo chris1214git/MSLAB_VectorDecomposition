@@ -118,7 +118,7 @@ if __name__ =='__main__':
     else:
         doc_idx = []
         for idx in range(200):
-            doc_idx.append(random.randint(0, len(validation_set)))
+            doc_idx.append(random.randint(0, len(validation_set)-1))
     # visualize documents
     for idx in doc_idx:
         # get recontruct result

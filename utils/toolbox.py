@@ -313,7 +313,7 @@ def get_preprocess_document_embs(preprocessed_docs, model_name):
 
     return doc_embs, model   
 
-def get_word_embs(vocabularys, word_emb_file='../data/glove.6B.300d.txt'):
+def get_word_embs(vocabularys, id2token=None, word_emb_file='../data/glove.6B.300d.txt', data_type='ndarray'):
     '''
     Returns word_embs array for semantic precision
 
@@ -323,19 +323,26 @@ def get_word_embs(vocabularys, word_emb_file='../data/glove.6B.300d.txt'):
             Returns:
                     word_embs (array): 
     '''
-    print('Getting word embeddings')
+    
     word2emb = load_word2emb(word_emb_file)
-    dim = len(list(word2emb.values())[0])
+    if data_type == 'tensor':
+        print('Getting [tensor] word embeddings')
+        word_embs = torch.zeros(len(id2token), len(word2emb['a']))
+        for k in id2token:
+            if id2token[k] not in word2emb:
+                continue
+            word_embs[k] = torch.tensor(word2emb[id2token[k]])
+    else:
+        print('Getting [ndarray] word embeddings')
+        dim = len(list(word2emb.values())[0])
+        word_embs = []
+        for word in vocabularys:
+            if word not in word2emb:
+                emb = np.zeros(dim)
+            else:
+                emb = word2emb[word]
+            word_embs.append(emb) 
 
-    word_embs = []
-    for word in vocabularys:
-        if word not in word2emb:
-            emb = np.zeros(dim)
-        else:
-            emb = word2emb[word]
-        word_embs.append(emb) 
-
-    word_embs = np.array(word_embs)
+        word_embs = np.array(word_embs)
 
     return word_embs
-

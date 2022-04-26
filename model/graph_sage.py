@@ -78,7 +78,8 @@ class DecoderNetwork(nn.Module):
     def __init__(self, input_dim, output_dim):
         super().__init__()
         self.word_embedding = nn.Parameter(torch.randn(output_dim, output_dim))
-        self.sage = SAGE(in_channels=input_dim*4, hidden_channels=256, num_layers=2)
+        self.batch_norm = nn.BatchNorm1d(output_dim)
+        self.sage = SAGE(in_channels=output_dim, hidden_channels=256, num_layers=2)
         self.decoder = nn.Sequential(
             nn.Linear(input_dim, input_dim*4),
             nn.BatchNorm1d(input_dim*4),
@@ -145,7 +146,7 @@ class GraphSAGE:
 
     def fit(self, training_set, validation_set):
         training_loader = DataLoader(training_set, batch_size=self.batch_size, shuffle=True, pin_memory=True,)
-        validation_loader = DataLoader(validation_set, batch_size=self.batch_size, shuffle=False, pin_memory=True, drop_last=True)
+        validation_loader = DataLoader(validation_set, batch_size=self.batch_size, shuffle=False, pin_memory=True)
         if self.config['model'] == 'GraphSAGE':
             graph_loader = NeighborSampler(self.edge_index, sizes=[10, 10], batch_size=self.batch_size, shuffle=True, num_nodes=self.vocab_size)
             graph_iterloader = cycle(graph_loader)
@@ -176,13 +177,13 @@ class GraphSAGE:
                 loss.backward()
                 self.optimizer.step()
                 self.optimizer.zero_grad()
-            if epoch % 10 == 0 and epoch != 0:
+            if  (epoch + 1) % 10 == 0:
                 validation_result = self.validation(validation_loader)
-                record = open('./'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['encoder']+'_'+self.config['target']+'_document.txt', 'a')
+                record = open('./'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['encoder']+'_'+self.config['target']+'.txt', 'a')
                 print('---------------------------------------')
                 record.write('-------------------------------------------------\n')
-                print('EPOCH', epoch)
-                record.write('EPOCH '+ str(epoch) + '\n')
+                print('EPOCH', epoch + 1)
+                record.write('EPOCH '+ str(epoch + 1) + '\n')
                 for key,val in validation_result.items():
                     print(f"{key}:{val:.4f}")
                     record.write(f"{key}:{val:.4f}\n")
@@ -198,7 +199,7 @@ class GraphSAGE:
                 emb, target = emb.to(self.device), target.to(self.device)
                 recon_dists = self.decoder(emb)
                 # Semantic Prcision for reconstruct
-                precision_scores, word_result = semantic_precision_all(recon_dists.cpu(), target.cpu(), self.word_embeddings, self.vocabulary, k=self.config['topk'], th = self.config['threshold'])
+                precision_scores, word_result = semantic_precision_all(recon_dists, target, self.word_embeddings, self.vocabulary, k=self.config['topk'], th = self.config['threshold'])
                 for k, v in precision_scores.items():
                     results['[Recon] Semantic Precision@{}'.format(k)].append(v)
                     
@@ -257,14 +258,13 @@ class GraphSAGE:
                 doc_idx = [174, 455, 466, 95, 252, 576, 629, 532, 260, 586, 477, 54, 95, 486, 97, 625, 453, 360, 603, 492, 707, 342, 273, 236, 461, 289, 53, 684, 519, 378, 381, 593, 568, 124, 330, 630, 187, 178, 157, 378, 709, 666, 390, 66, 122, 337, 58, 545, 222, 421, 682, 451, 285, 695, 500, 516, 224, 43, 376, 422, 431, 38, 303, 628, 141, 191, 81, 471, 86, 649, 266, 313, 657, 221, 309, 443, 551, 181, 314, 160, 452, 15, 676, 318, 255, 569, 439, 148, 569, 600, 430, 551, 414, 534, 710, 687, 168, 251, 184, 473, 655, 182, 486, 576, 557, 91, 12, 49, 122, 448, 714, 625, 180, 635, 422, 617, 44, 630, 184, 326, 244, 500, 363, 640, 587, 638, 583, 557, 198, 377, 96, 98, 533, 565, 426, 488, 601, 458, 488, 330, 338, 440, 157, 368, 171, 195, 312, 261, 563, 5, 440, 363, 549, 557, 443, 184, 582, 662, 245, 451, 343, 494, 391, 622, 575, 105, 369, 368, 99, 180, 204, 678, 182, 38, 493, 616, 350, 94, 547, 392, 457, 403, 291, 389, 385, 142, 605, 184, 599, 151, 459, 248, 335, 516, 710, 524, 507, 28, 592, 129]
         else:
             doc_idx = []
-            for idx in range(200):
-                doc_idx.append(random.randint(0, len(validation_set)))
+            for idx in range(100):
+                doc_idx.append(random.randint(0, len(validation_set)-1))
 
         # visualize documents
         for idx in doc_idx:
             # get recontruct result
             recon_list, target_list, doc_list = self.get_reconstruct(validation_loader)
-
             # get ranking index
             recon_rank_list = np.zeros((len(recon_list), len(self.vocabulary)), dtype='float32')
             target_rank_list = np.zeros((len(recon_list), len(self.vocabulary)), dtype='float32')
@@ -273,7 +273,7 @@ class GraphSAGE:
                 target_rank_list[i] = np.argsort(target_list[i])[::-1]
 
             # show info
-            record = open('./'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['encoder']+'_'+self.config['target']+'.txt', 'a')
+            record = open('./'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['encoder']+'_'+self.config['target']+'_document.txt', 'a')
             print('Documents ', idx)
             record.write('Documents '+str(idx)+'\n')
             print(doc_list[idx])

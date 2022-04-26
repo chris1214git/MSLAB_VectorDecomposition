@@ -66,7 +66,7 @@ if __name__ =='__main__':
     token2id = {v: k for k, v in id2token.items()}
 
     # word embedding preparation
-    word_embeddings = get_word_embs(vocabularys[config['target']])
+    word_embeddings = get_word_embs(vocabularys[config['target']], id2token=id2token, data_type='tensor')
 
     # Build Graph
     if config['model'] == 'GraphSAGE':
@@ -90,14 +90,12 @@ if __name__ =='__main__':
     else:
         contextual_size = 768
 
-    model = GraphSAGE(config=config, edge_index=edge_index, vocabulary=vocabularys[config['target']], id2token=id2token, contextual_size=contextual_size, vocab_size=len(vocabularys[config['target']]), word_embeddings=word_embeddings)
-    model.fit(training_set, validation_set)
     # Declare model & train
-    # while True:
-    #     try:
-    #         model = GraphSAGE(config=config, edge_index=edge_index, vocabulary=vocabularys[config['target']], id2token=id2token, contextual_size=contextual_size, vocab_size=len(vocabularys[config['target']]), word_embeddings=word_embeddings)
-    #         model.fit(training_set, validation_set)
-    #         break
-    #     except:
-    #         print('[Error] CUDA Memory Insufficient, retry after 15 secondes.')
-    #         time.sleep(15)
+    while True:
+        try:
+            model = GraphSAGE(config=config, edge_index=edge_index, vocabulary=vocabularys[config['target']], id2token=id2token, contextual_size=contextual_size, vocab_size=len(vocabularys[config['target']]), word_embeddings=word_embeddings)
+            model.fit(training_set, validation_set)
+            break
+        except:
+            print('[Error] CUDA Memory Insufficient, retry after 15 secondes.')
+            time.sleep(15)
