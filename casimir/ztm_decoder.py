@@ -25,10 +25,10 @@ if __name__ =='__main__':
     parser.add_argument('--dataset', type=str, default="20news")
     parser.add_argument('--dataset_name', type=str, default="20news")
     parser.add_argument('--min_df', type=int, default=1)
-    parser.add_argument('--mxa_df', type=float, default=1.0)
+    parser.add_argument('--max_df', type=float, default=1.0)
     parser.add_argument('--vocabulary_size', type=int, default=8000)
     parser.add_argument('--min_doc_word', type=int, default=15)
-    parser.add_argument('--encoder', type=str, default='roberta')
+    parser.add_argument('--encoder', type=str, default='bert')
     parser.add_argument('--target', type=str, default='tf-idf')
     parser.add_argument('--topic_num', type=int, default=50)
     parser.add_argument('--seed', type=int, default=123)
@@ -43,7 +43,6 @@ if __name__ =='__main__':
     args = parser.parse_args()
     
     config = vars(args)
-    config["dataset_name"] = config["dataset"]
     show_settings(config)
     record_settings(config)
     same_seeds(config["seed"])

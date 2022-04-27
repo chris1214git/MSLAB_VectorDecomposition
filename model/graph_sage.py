@@ -9,7 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 from torch_cluster import random_walk
 from torch_geometric.datasets import Planetoid
 from torch_geometric.loader import NeighborSampler as RawNeighborSampler
-from torch_geometric.nn import GCNConv, GAE, VGAE, SAGEConv
+from torch_geometric.nn import GCNConv, GAE, VGAE, SAGEConv, GATConv
 from torch_geometric.data import Data
 from tqdm.auto import tqdm
 from itertools import cycle

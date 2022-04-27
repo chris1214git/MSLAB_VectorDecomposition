@@ -215,21 +215,21 @@ def generate_graph(doc_list, word2index, index2word):
 
     return edge
 
-def get_preprocess_document(dataset_name, min_df=1, max_df=1.0, vocabulary_size=None, min_doc_word=15, **kwargs):
+def get_preprocess_document(dataset, min_df=1, max_df=1.0, vocabulary_size=None, min_doc_word=15, **kwargs):
     '''
     Returns preprocessed_docs & unpreprocessed_docs of the dataset
 
             Parameters:
-                    dataset_name (str): For data_loader
+                    dataset (str): For data_loader
                     min_df, max_df, vocabulary_size: For CountVectorizer in CTM preprocess
                     min_doc_word: Minimum doc length
             Returns:
                     unpreprocessed_docs (list):
                     preprocessed_docs (list):
     '''
-    print('Getting preprocess documents:', dataset_name)
+    print('Getting preprocess documents:', dataset)
     print(f'min_df: {min_df} max_df: {max_df} vocabulary_size: {vocabulary_size} min_doc_word: {min_doc_word}')
-    raw_documents = load_document(dataset_name)["documents"]
+    raw_documents = load_document(dataset)["documents"]
     # CTM preprocess
     sp = WhiteSpacePreprocessing_v2(raw_documents, stopwords_language='english',\
                                     min_df=min_df, max_df=max_df, vocabulary_size=vocabulary_size)
@@ -293,8 +293,8 @@ def get_preprocess_document_embs(preprocessed_docs, model_name):
                     model (class): 
     '''
     print('Getting preprocess documents embeddings')
-    if model_name == 'roberta':
-        model = SentenceTransformer("paraphrase-distilroberta-base-v1", device=get_free_gpu())
+    if model_name == 'bert':
+        model = SentenceTransformer("bert-base-uncased", device=get_free_gpu())
         doc_embs = np.array(model.encode(preprocessed_docs, show_progress_bar=True, batch_size=200))
     elif model_name == 'mpnet':
         model = SentenceTransformer("all-mpnet-base-v2", device=get_free_gpu())
