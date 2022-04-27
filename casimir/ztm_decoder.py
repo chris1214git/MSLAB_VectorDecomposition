@@ -45,6 +45,14 @@ if __name__ =='__main__':
     config = vars(args)
     same_seeds(config["seed"])
 
+    # Parameter
+    if config['dataset'] == '20news':
+        config['min_df'], config['max_df'], config['min_doc_word'] = 50, 1.0, 15
+    elif config['dataset'] == 'agnews':
+        config['min_df'], config['max_df'], config['min_doc_word'] = 100, 1.0, 15
+    elif config['dataset'] == 'tweet':
+        config['min_df'], config['max_df'], config['min_doc_word'] = 5, 1.0, 15
+
     # data preprocessing
     unpreprocessed_corpus ,preprocessed_corpus = get_preprocess_document(**config)
     texts = [text.split() for text in preprocessed_corpus]

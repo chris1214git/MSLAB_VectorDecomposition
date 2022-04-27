@@ -31,7 +31,7 @@ if __name__ =='__main__':
     parser.add_argument('--dataset', type=str, default="20news")
     parser.add_argument('--dataset_name', type=str, default="20news")
     parser.add_argument('--min_df', type=int, default=1)
-    parser.add_argument('--mxa_df', type=float, default=1.0)
+    parser.add_argument('--max_df', type=float, default=1.0)
     parser.add_argument('--vocab_size', type=int, default=0)
     parser.add_argument('--min_doc_word', type=int, default=15)
     parser.add_argument('--encoder', type=str, default='bert')
@@ -50,7 +50,14 @@ if __name__ =='__main__':
     
     config = vars(args)
     same_seeds(config["seed"])
-
+    
+    # Parameter
+    if config['dataset'] == '20news':
+        config['min_df'], config['max_df'], config['min_doc_word'] = 50, 1.0, 15
+    elif config['dataset'] == 'agnews':
+        config['min_df'], config['max_df'], config['min_doc_word'] = 100, 1.0, 15
+    elif config['dataset'] == 'tweet':
+        config['min_df'], config['max_df'], config['min_doc_word'] = 5, 1.0, 15
     # data preprocessing
     unpreprocessed_corpus ,preprocessed_corpus = get_preprocess_document(**config)
 
