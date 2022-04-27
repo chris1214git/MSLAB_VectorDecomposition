@@ -49,9 +49,6 @@ if __name__ =='__main__':
     args = parser.parse_args()
     
     config = vars(args)
-    config["dataset_name"] = config["dataset"]
-    show_settings(config)
-    record_settings(config)
     same_seeds(config["seed"])
 
     # data preprocessing
@@ -68,6 +65,13 @@ if __name__ =='__main__':
     # word embedding preparation
     word_embeddings = get_word_embs(vocabularys[config['target']], id2token=id2token, data_type='tensor')
 
+    # Show Setting
+    vocab_bound = config['vocabulary_size']
+    config['vocabulary_size'] = len(vocabularys[config['target']])
+    show_settings(config)
+    record_settings(config)
+    config['vocabulary_size'] = vocab_bound
+    
     # Build Graph
     if config['model'] == 'GraphSAGE':
         vocab_set = set(token2id)
