@@ -215,7 +215,7 @@ def generate_graph(doc_list, word2index, index2word):
 
     return edge
 
-def get_preprocess_document(dataset, min_df=1, max_df=1.0, vocabulary_size=None, min_doc_word=15, **kwargs):
+def get_preprocess_document(dataset, min_df=1, max_df=1.0, vocabulary_size=None, min_doc_word=15, use_pos=True, **kwargs):
     '''
     Returns preprocessed_docs & unpreprocessed_docs of the dataset
 
@@ -238,7 +238,8 @@ def get_preprocess_document(dataset, min_df=1, max_df=1.0, vocabulary_size=None,
     # filter special character
     preprocessed_docs = delete_non_eng(preprocessed_docs)
     # select nouns & verbs
-    preprocessed_docs = pos(preprocessed_docs)
+    if use_pos:
+        preprocessed_docs = pos(preprocessed_docs)
     # delete short articles
     delete_docs_idx = []
     for idx in range(len(preprocessed_docs)):
@@ -280,6 +281,38 @@ def get_preprocess_document_labels(preprocessed_docs, preprocess_config='../chri
     vocabularys['bow'] = vocabulary
 
     return labels, vocabularys
+
+def get_preprocess_document_labels_v2(preprocessed_docs, preprocess_config, ngram=1):
+    '''
+    Returns labels for document decoder
+
+            Parameters:
+                    preprocessed_docs (list): 
+            Returns:
+                    labels (dict): bow, tf-idf
+                    vocabulary (dict): bow, tf-idf
+    '''
+    print('Getting preprocess documents labels')
+    print('Finding precompute_keyword by preprocess_config', preprocess_config)
+    config_dir = 'keyword'
+    for k, v in preprocess_config.items():
+        config_dir += f'_{k}_{v}'
+    config_dir += f'_ngram_{ngram}'
+    config_dir = os.path.join('../data/precompute_keyword', config_dir)
+    
+    tf_idf_vector = np.load(os.path.join(config_dir, 'TFIDF.npy'))
+    bow_vector = np.load(os.path.join(config_dir, 'BOW.npy'))
+    keybert_vector = np.load(os.path.join(config_dir, 'KeyBERT.npy'))
+    yake_vector = np.load(os.path.join(config_dir, 'YAKE.npy'))
+    vocabulary = np.load(os.path.join(config_dir, 'vocabulary.npy'))
+
+    labels = {}
+    labels['tf-idf'] = tf_idf_vector
+    labels['bow'] = bow_vector
+    labels['keybert'] = keybert_vector
+    labels['yake'] = yake_vector
+    
+    return labels, vocabulary
 
 def get_preprocess_document_embs(preprocessed_docs, model_name):
     '''
