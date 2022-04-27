@@ -34,7 +34,7 @@ if __name__ =='__main__':
     parser.add_argument('--mxa_df', type=float, default=1.0)
     parser.add_argument('--vocabulary_size', type=int, default=8000)
     parser.add_argument('--min_doc_word', type=int, default=15)
-    parser.add_argument('--encoder', type=str, default='roberta')
+    parser.add_argument('--encoder', type=str, default='bert')
     parser.add_argument('--target', type=str, default='tf-idf')
     parser.add_argument('--seed', type=int, default=123)
     parser.add_argument('--epochs', type=int, default=300)
