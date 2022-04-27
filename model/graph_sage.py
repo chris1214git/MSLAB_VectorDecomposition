@@ -148,7 +148,7 @@ class GraphSAGE:
         training_loader = DataLoader(training_set, batch_size=self.batch_size, shuffle=True, pin_memory=True,)
         validation_loader = DataLoader(validation_set, batch_size=self.batch_size, shuffle=False, pin_memory=True)
         if self.config['model'] == 'GraphSAGE':
-            graph_loader = NeighborSampler(self.edge_index, sizes=[10, 10], batch_size=self.batch_size, shuffle=True, num_nodes=self.vocab_size)
+            graph_loader = NeighborSampler(self.edge_index, sizes=[-1, -1], batch_size=self.batch_size, shuffle=True, num_nodes=self.vocab_size)
             graph_iterloader = cycle(graph_loader)
 
         self.decoder = self.decoder.to(self.device)
