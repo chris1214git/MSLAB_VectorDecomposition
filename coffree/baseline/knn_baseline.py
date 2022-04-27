@@ -82,6 +82,7 @@ if __name__ == '__main__':
 
     # Decode target & Vocabulary
     labels, vocabularys= get_preprocess_document_labels(preprocessed_corpus)
+    id2token = {k: v for k, v in zip(range(0, len(vocabularys[config['target']])), vocabularys[config['target']])}
 
     # word embedding preparation
     word_embeddings = get_word_embs(vocabularys[config['target']], id2token=id2token, data_type='tensor')
