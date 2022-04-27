@@ -55,7 +55,7 @@ class SAGE(nn.Module):
         self.convs = nn.ModuleList()
         for i in range(num_layers):
             in_channels = in_channels if i == 0 else hidden_channels
-            self.convs.append(SAGEConv(in_channels, hidden_channels))
+            self.convs.append(GATConv(in_channels, hidden_channels))
 
     def forward(self, x, adjs):
         for i, (edge_index, _, size) in enumerate(adjs):
@@ -148,7 +148,7 @@ class GraphSAGE:
         training_loader = DataLoader(training_set, batch_size=self.batch_size, shuffle=True, pin_memory=True,)
         validation_loader = DataLoader(validation_set, batch_size=self.batch_size, shuffle=False, pin_memory=True)
         if self.config['model'] == 'GraphSAGE':
-            graph_loader = NeighborSampler(self.edge_index, sizes=[-1, -1], batch_size=self.batch_size, shuffle=True, num_nodes=self.vocab_size)
+            graph_loader = NeighborSampler(self.edge_index, sizes=[25, 10], batch_size=self.batch_size, shuffle=True, num_nodes=self.vocab_size)
             graph_iterloader = cycle(graph_loader)
 
         self.decoder = self.decoder.to(self.device)

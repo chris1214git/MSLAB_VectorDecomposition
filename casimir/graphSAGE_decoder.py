@@ -38,7 +38,7 @@ if __name__ =='__main__':
     parser.add_argument('--target', type=str, default='tf-idf')
     parser.add_argument('--seed', type=int, default=123)
     parser.add_argument('--epochs', type=int, default=300)
-    parser.add_argument('--batch_size', type=int, default=64)
+    parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--optimizer', type=str, default='adam')
     parser.add_argument('--momentum', type=float, default=0.99)
