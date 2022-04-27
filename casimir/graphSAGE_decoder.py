@@ -32,7 +32,7 @@ if __name__ =='__main__':
     parser.add_argument('--dataset_name', type=str, default="20news")
     parser.add_argument('--min_df', type=int, default=1)
     parser.add_argument('--mxa_df', type=float, default=1.0)
-    parser.add_argument('--vocabulary_size', type=int, default=8000)
+    parser.add_argument('--vocab_size', type=int, default=0)
     parser.add_argument('--min_doc_word', type=int, default=15)
     parser.add_argument('--encoder', type=str, default='bert')
     parser.add_argument('--target', type=str, default='tf-idf')
@@ -66,11 +66,9 @@ if __name__ =='__main__':
     word_embeddings = get_word_embs(vocabularys[config['target']], id2token=id2token, data_type='tensor')
 
     # Show Setting
-    vocab_bound = config['vocabulary_size']
-    config['vocabulary_size'] = len(vocabularys[config['target']])
+    config['vocab_size'] = len(vocabularys[config['target']])
     show_settings(config)
     record_settings(config)
-    config['vocabulary_size'] = vocab_bound
     
     # Build Graph
     if config['model'] == 'GraphSAGE':
