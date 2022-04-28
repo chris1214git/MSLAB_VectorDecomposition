@@ -282,7 +282,7 @@ def get_preprocess_document_labels(preprocessed_docs, preprocess_config='../chri
 
     return labels, vocabularys
 
-def get_preprocess_document_labels_v2(preprocessed_docs, preprocess_config, ngram=1):
+def get_preprocess_document_labels_v2(preprocessed_docs, preprocess_config, preprocess_config_dir, ngram=1):
     '''
     Returns labels for document decoder
 
@@ -293,12 +293,13 @@ def get_preprocess_document_labels_v2(preprocessed_docs, preprocess_config, ngra
                     vocabulary (dict): bow, tf-idf
     '''
     print('Getting preprocess documents labels')
+
     print('Finding precompute_keyword by preprocess_config', preprocess_config)
-    config_dir = 'keyword'
+    preprocess_config_dir2 = 'keyword'
     for k, v in preprocess_config.items():
-        config_dir += f'_{k}_{v}'
-    config_dir += f'_ngram_{ngram}'
-    config_dir = os.path.join('../data/precompute_keyword', config_dir)
+        preprocess_config_dir2 += f'_{k}_{v}'
+    preprocess_config_dir2 += f'_ngram_{ngram}'
+    config_dir = os.path.join('../data/precompute_keyword', preprocess_config_dir, preprocess_config_dir2)
     
     tf_idf_vector = np.load(os.path.join(config_dir, 'TFIDF.npy'))
     bow_vector = np.load(os.path.join(config_dir, 'BOW.npy'))

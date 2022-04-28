@@ -14,7 +14,6 @@
 import os
 import sys
 from collections import defaultdict
-import argparse
 import numpy as np 
 import pandas as pd
 import json
@@ -57,6 +56,8 @@ from utils.toolbox import preprocess_document, get_preprocess_document, get_prep
 # label -> bow, tf-idf, keybert, classification
 
 # In[2]:
+
+import argparse
 parser = argparse.ArgumentParser(description='dnn decoder baseline')
 parser.add_argument('--dataset', type=str, default="20news")
 parser.add_argument('--model_name', type=str, default='average')
@@ -244,7 +245,7 @@ def evaluate_DNNDecoder(model, data_loader, config, pred_semantic=False):
         target = target.to(device)
                 
         pred = model(doc_embs)
-        if config['label_type'] == 'bow':
+        if config['label_type'] == '123':
             # Precision / Recall / F1
             p, r, f = precision_recall_f1_all(pred, target)
             results['precision'].append(p)
@@ -359,8 +360,11 @@ def train_decoder(doc_embs, targets, train_config):
 
             train_res_ndcg = evaluate_DNNDecoder(model, train_loader, train_config, epoch == n_epoch-1)
             valid_res_ndcg = evaluate_DNNDecoder(model, valid_loader, train_config, epoch == n_epoch-1)
-
-            res.update(valid_res_ndcg)
+            test_res_ndcg = evaluate_DNNDecoder(model, test_loader, train_config, epoch == n_epoch-1)
+            
+            res['train'] = train_res_ndcg
+            res['valid'] = valid_res_ndcg
+            res['test'] = test_res_ndcg 
             results.append(res)
 
             if valid_verbose:
@@ -382,7 +386,7 @@ def train_experiment(n_time):
     return results
 
 
-# In[15]:
+# In[18]:
 
 
 train_config = {
@@ -391,7 +395,7 @@ train_config = {
     "weight_decay": 0.0,
     "loss_topk": 15,
     
-    "n_epoch": 100,
+    "n_epoch": 200,
     "valid_epoch": 10,
     "valid_verbose": True,
     "valid_topk": [5, 10, 15],
@@ -402,13 +406,13 @@ train_config = {
 }
 
 
-# In[ ]:
+# In[19]:
 
 
 train_experiment(train_config['n_time'])
 
 
-# In[ ]:
+# In[20]:
 
 
 # save config, training config

@@ -19,31 +19,35 @@ from utils.toolbox import get_preprocess_document
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='unsupervised keyword retrieve.')
     parser.add_argument('--dataset', type=str, default="20news")
+    parser.add_argument('--preprocess_config_dir', type=str, default="parameters_baseline")
     parser.add_argument('--ngram', type=int, default=1)
     parser.add_argument('--cpu_num', type=str, default="1")
     parser.add_argument('--seed', type=int, default=123)
     
     args = parser.parse_args()
     config = vars(args)
-    dataset_name = config['dataset']
-    with open(os.path.join('../chris/parameters', f'preprocess_config_{dataset_name}.json'), 'r') as f:
+    dataset = config['dataset']
+    preprocess_config_dir = config['preprocess_config_dir']
+    
+    with open(os.path.join(f'../chris/{preprocess_config_dir}', f'preprocess_config_{dataset}.json'), 'r') as f:
         preprocess_config = json.load(f)
 
     # constrain cpu/not working on keybert
     torch.set_num_threads(int(config["cpu_num"]))
         
     # read dataset
-    print("loading dataset: {}".format(preprocess_config["dataset_name"]))
+    print("loading dataset: {}".format(preprocess_config["dataset"]))
     print("preprocess config", preprocess_config)
     unpreprocessed_docs ,preprocessed_docs = get_preprocess_document(**preprocess_config)
     preprocess_config['ngram'] = config['ngram']
     
     # save folder
     save_folder1 = "precompute_keyword"
-    save_folder2 = "keyword"
+    save_folder2 = preprocess_config_dir
+    save_folder3 = "keyword"
     for k, v in preprocess_config.items():
-        save_folder2 = save_folder2 + f"_{k}_{v}"
-    save_folder = os.path.join(save_folder1, save_folder2)
+        save_folder3 = save_folder3 + f"_{k}_{v}"
+    save_folder = os.path.join(save_folder1, save_folder2, save_folder3)
     os.makedirs(save_folder, exist_ok=True)    
     
     # BOW TFIDF

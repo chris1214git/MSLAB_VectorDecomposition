@@ -1,0 +1,1 @@
+{"experiment_dir": "tweet_mpnet_bow", "experiment_dir2": "default", "dataset_name": "tweet", "model_name": "mpnet", "label_type": "bow", "criterion": "BCE", "n_time": 5, "seed": 123}

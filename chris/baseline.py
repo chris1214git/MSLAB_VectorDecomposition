@@ -31,7 +31,9 @@ sys.path.append('../')
 from utils.eval import retrieval_normalized_dcg_all, retrieval_precision_all, semantic_precision_all, precision_recall_f1_all
 from utils.loss import *
 from utils.data_loader import load_document
-from utils.toolbox import preprocess_document, get_preprocess_document, get_preprocess_document_embs,                          get_preprocess_document_labels, get_word_embs
+from utils.toolbox import preprocess_document, get_preprocess_document, get_preprocess_document_embs, \
+                          get_preprocess_document_labels, get_preprocess_document_labels_v2, get_word_embs,\
+                          get_free_gpu
 
 
 # ## Data preprocess
@@ -62,44 +64,40 @@ parser = argparse.ArgumentParser(description='dnn decoder baseline')
 parser.add_argument('--dataset', type=str, default="20news")
 parser.add_argument('--model_name', type=str, default='average')
 parser.add_argument('--label_type', type=str, default='bow')
+parser.add_argument('--eval_f1', action="store_true")
 parser.add_argument('--criterion', type=str, default='BCE')
+parser.add_argument('--n_gram', type=int, default=1)
 parser.add_argument('--n_time', type=int, default=5)
 parser.add_argument('--save_dir', type=str, default='default')
+parser.add_argument('--preprocess_config_dir', type=str, default='parameters_baseline')
 parser.add_argument('--seed', type=int, default=123)
 
 args = parser.parse_args()
 config = vars(args)
-print(config)
 
-dataset_name = config['dataset']
+dataset = config['dataset']
 model_name = config['model_name']
 label_type = config['label_type']
+eval_f1 = config['eval_f1']
 criterion = config['criterion']
+preprocess_config_dir = config['preprocess_config_dir']
+n_gram = config['n_gram']
+
 n_time = config['n_time']
 seed = config['seed']
-experiment_dir = f'{dataset_name}_{model_name}_{label_type}'
+experiment_dir = f'{dataset}_{model_name}_{label_type}_{criterion}'
 experiment_dir2 = config['save_dir']
 
-config = {}
 config['experiment_dir'] = experiment_dir
-config['experiment_dir2'] = experiment_dir2
-config['dataset_name'] = dataset_name
-config['model_name'] = model_name
-config['label_type'] = label_type
-config['criterion'] = criterion
-config['n_time'] = n_time
-config['seed'] = seed
-
-save_dir = os.path.join('experiment', config['experiment_dir'], config['experiment_dir2'])
+save_dir = os.path.join('experiment', config['experiment_dir'], config['save_dir'])
 os.makedirs(save_dir, exist_ok=False)
-
 
 # In[3]:
 
 
-with open(os.path.join('../chris/parameters', f'preprocess_config_{dataset_name}.json'), 'r') as f:
+with open(os.path.join(f'../chris/{preprocess_config_dir}', f'preprocess_config_{dataset}.json'), 'r') as f:
     preprocess_config = json.load(f)
-        
+
 unpreprocessed_docs ,preprocessed_docs = get_preprocess_document(**preprocess_config)
 print('doc num', len(preprocessed_docs))
 
@@ -114,19 +112,34 @@ print('doc_embs', doc_embs.shape)
 # In[5]:
 
 
-labels, vocabularys = get_preprocess_document_labels(preprocessed_docs)
+labels, vocabularys = get_preprocess_document_labels_v2(preprocessed_docs, preprocess_config, preprocess_config_dir, config['n_gram'])
 
 
 # In[6]:
 
 
+for k in labels:
+    print(k, np.sum(labels[k]!=0), labels[k].shape)
+print(len(vocabularys))
+
+
+# In[ ]:
+
+
 targets = labels[config['label_type']] 
-vocabularys = vocabularys[config['label_type']]
+vocabularys = vocabularys
 word_embs = get_word_embs(vocabularys)
 print('word_embs', word_embs.shape)
 
 
-# In[7]:
+# In[ ]:
+
+
+if config['label_type'] == 'yake':
+    targets = - targets
+
+
+# In[ ]:
 
 
 word_embs_tensor = torch.FloatTensor(word_embs)
@@ -134,14 +147,12 @@ word_embs_tensor = torch.FloatTensor(word_embs)
 
 # ## MLP Decoder
 
-# In[8]:
+# In[ ]:
 
 
-device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-# device = 'cpu'
 
 
-# In[9]:
+# In[ ]:
 
 
 class DNNDecoderDataset(Dataset):
@@ -161,7 +172,18 @@ class DNNDecoderDataset(Dataset):
         return len(self.doc_embs)
 
 
-# In[10]:
+# In[ ]:
+
+
+#             nn.Linear(input_dim, input_dim*4),
+#             nn.BatchNorm1d(input_dim*4),
+#             nn.Sigmoid(),
+#             nn.Linear(input_dim*4, output_dim),
+#             nn.BatchNorm1d(output_dim),
+#             nn.Sigmoid(),
+
+
+# In[ ]:
 
 
 def prepare_dataloader(doc_embs, targets, batch_size=100, train_valid_test_ratio=[0.7, 0.1, 0.2],                       target_normalize=False, seed=123):
@@ -202,14 +224,14 @@ def prepare_dataloader(doc_embs, targets, batch_size=100, train_valid_test_ratio
     return train_loader, valid_loader, test_loader
 
 
-# In[11]:
+# In[ ]:
 
 
 # prepare dataloader
 train_loader, valid_loader, test_loader = prepare_dataloader(doc_embs, targets, batch_size=100,                                                             train_valid_test_ratio=[0.7, 0.1, 0.2],target_normalize=False,                                                             seed=seed)
 
 
-# In[12]:
+# In[ ]:
 
 
 class DNNDecoder(nn.Module):
@@ -230,7 +252,7 @@ class DNNDecoder(nn.Module):
         return self.decoder(x)
 
 
-# In[13]:
+# In[ ]:
 
 
 def evaluate_DNNDecoder(model, data_loader, config, pred_semantic=False):
@@ -245,7 +267,7 @@ def evaluate_DNNDecoder(model, data_loader, config, pred_semantic=False):
         target = target.to(device)
                 
         pred = model(doc_embs)
-        if config['label_type'] == 'bow':
+        if config['eval_f1']:
             # Precision / Recall / F1
             p, r, f = precision_recall_f1_all(pred, target)
             results['precision'].append(p)
@@ -274,7 +296,7 @@ def evaluate_DNNDecoder(model, data_loader, config, pred_semantic=False):
     return results
 
 
-# In[14]:
+# In[ ]:
 
 
 def calculate_loss(train_train_config, criterion, pred, target, target_rank, target_topk):
@@ -386,7 +408,7 @@ def train_experiment(n_time):
     return results
 
 
-# In[18]:
+# In[ ]:
 
 
 train_config = {
@@ -402,17 +424,19 @@ train_config = {
     
     "h_dim": 300,
     "label_type": config['label_type'],
+    "eval_f1": config['eval_f1'],
     "criterion": config['criterion']
 }
 
 
-# In[19]:
+# In[ ]:
 
 
+device = get_free_gpu()#'cuda:0' if torch.cuda.is_available() else 'cpu'
 train_experiment(train_config['n_time'])
 
 
-# In[20]:
+# In[ ]:
 
 
 # save config, training config

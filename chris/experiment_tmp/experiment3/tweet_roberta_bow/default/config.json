@@ -1,0 +1,1 @@
+{"experiment_dir": "tweet_roberta_bow", "experiment_dir2": "default", "dataset_name": "tweet", "model_name": "roberta", "label_type": "bow", "criterion": "BCE", "n_time": 5, "seed": 123}
