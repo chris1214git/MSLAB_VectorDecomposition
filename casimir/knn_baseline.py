@@ -11,7 +11,7 @@ from torch.utils.data import random_split
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.model_selection import train_test_split
 from utils.eval import retrieval_normalized_dcg_all, retrieval_precision_all, semantic_precision_all
-from utils.toolbox import same_seeds, show_settings, record_settings, get_preprocess_document, get_preprocess_document_embs, get_preprocess_document_labels, get_word_embs
+from utils.toolbox import same_seeds, show_settings, record_settings, get_preprocess_document, get_preprocess_document_embs, get_preprocess_document_labels_v3, get_word_embs
 
 torch.set_num_threads(8)
 
@@ -73,6 +73,10 @@ if __name__ == '__main__':
     elif config['dataset'] == 'tweet':
         config['min_df'], config['max_df'], config['min_doc_word'] = 5, 1.0, 15
     
+    # Decode target & Vocabulary
+    labels, vocabularys= get_preprocess_document_labels_v3(config)
+    id2token = {k: v for k, v in zip(range(0, len(vocabularys[config['target']])), vocabularys[config['target']])}
+
     # data preprocessing
     unpreprocessed_corpus ,preprocessed_corpus = get_preprocess_document(**config)
     texts = [text.split() for text in preprocessed_corpus]
@@ -80,9 +84,7 @@ if __name__ == '__main__':
     # generating document embedding
     doc_embs, doc_model = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
 
-    # Decode target & Vocabulary
-    labels, vocabularys= get_preprocess_document_labels(preprocessed_corpus)
-    id2token = {k: v for k, v in zip(range(0, len(vocabularys[config['target']])), vocabularys[config['target']])}
+    
 
     # word embedding preparation
     word_embeddings = get_word_embs(vocabularys[config['target']], id2token=id2token, data_type='tensor')
