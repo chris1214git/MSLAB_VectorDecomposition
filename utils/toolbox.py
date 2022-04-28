@@ -244,7 +244,7 @@ def get_preprocess_document(dataset, min_df=1, max_df=1.0, vocabulary_size=None,
     delete_docs_idx = []
     for idx in range(len(preprocessed_docs)):
         # length > min_doc_word
-        if len(preprocessed_docs[idx]) == 0 or len(preprocessed_docs[idx]) < min_doc_word:
+        if len(preprocessed_docs[idx]) == 0 or len(preprocessed_docs[idx].split()) < min_doc_word:
             delete_docs_idx.append(idx)
     delete_docs_idx = sorted(delete_docs_idx, reverse=True)
     for idx in delete_docs_idx:
