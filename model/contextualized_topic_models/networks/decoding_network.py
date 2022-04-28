@@ -9,7 +9,7 @@ class DecoderNetwork(nn.Module):
 
     ### casimir
     # (1) Add parameter vocab_size
-    def __init__(self, input_size, bert_size, infnet, n_components=10, model_type='prodLDA',
+    def __init__(self, config, input_size, bert_size, infnet, n_components=10, model_type='prodLDA',
                  hidden_sizes=(100,100), activation='softplus', dropout=0.2,
                  learn_priors=True, label_size=0, vocab_size=0, word_embedding=None):
     ###
@@ -36,6 +36,7 @@ class DecoderNetwork(nn.Module):
             "activation must be 'softplus' or 'relu'."
         assert dropout >= 0, "dropout must be >= 0."
 
+        self.config = config
         self.input_size = input_size
         self.n_components = n_components
         self.model_type = model_type
@@ -65,11 +66,18 @@ class DecoderNetwork(nn.Module):
             nn.Sigmoid(),
         )
         ## doc embedding info version
-        self.half_decoder = nn.Sequential(
-            nn.Linear(vocab_size+bert_size, vocab_size*4),
-            nn.BatchNorm1d(vocab_size*4),
-            nn.Sigmoid(),
-        )
+        if config['activation'] == 'tanh':
+            self.half_decoder = nn.Sequential(
+                nn.Linear(vocab_size+bert_size, vocab_size*4),
+                nn.BatchNorm1d(vocab_size*4),
+                nn.Tanh(),
+            )
+        else:
+            self.half_decoder = nn.Sequential(
+                nn.Linear(vocab_size+bert_size, vocab_size*4),
+                nn.BatchNorm1d(vocab_size*4),
+                nn.Sigmoid(),
+            )
         ## real share weight
         self.real_share_wieght_decoder = nn.Sequential(
             nn.Linear(bert_size, bert_size*4),

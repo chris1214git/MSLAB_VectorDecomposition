@@ -17,11 +17,12 @@ from utils.data_loader import load_document
 from utils.toolbox import same_seeds, show_settings, record_settings, get_preprocess_document, get_preprocess_document_embs, get_preprocess_document_labels, get_word_embs
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-torch.set_num_threads(8)
+torch.set_num_threads(15)
 
 if __name__ =='__main__':
     parser = argparse.ArgumentParser(description='document decomposition.')
     parser.add_argument('--model', type=str, default="ZTM")
+    parser.add_argument('--activation', type=str, default="sigmoid")
     parser.add_argument('--dataset', type=str, default="20news")
     parser.add_argument('--use_pos', type=bool, default=False)
     parser.add_argument('--min_df', type=int, default=1)
@@ -32,12 +33,15 @@ if __name__ =='__main__':
     parser.add_argument('--target', type=str, default='tf-idf')
     parser.add_argument('--topic_num', type=int, default=50)
     parser.add_argument('--seed', type=int, default=123)
-    parser.add_argument('--epochs', type=int, default=300)
+    parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--weight_decay', type=float, default=0)
+    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--epochs', type=int, default=500)
     parser.add_argument('--ratio', type=float, default=0.8)
     parser.add_argument('--topk', type=int, nargs='+', default=[5, 10, 15])
     parser.add_argument('--save', type=bool, default=False)
     parser.add_argument('--threshold', type=float, default=0.5)
-    parser.add_argument('--check_document', type=bool, default=True)
+    parser.add_argument('--check_document', type=bool, default=False)
     parser.add_argument('--check_auto', type=bool, default=True)
     parser.add_argument('--check_nums', type=int, default=500)
     args = parser.parse_args()
@@ -104,48 +108,49 @@ if __name__ =='__main__':
 
     # Pre-Define Document to check
     # Notice: only for vocabulary size = 8000
-    doc_idx = []
-    for idx in range(200):
-        doc_idx.append(random.randint(0, len(validation_set)-1))
-    # visualize documents
-    for idx in doc_idx:
-        # get recontruct result
-        recon_list, target_list, doc_list = model.get_reconstruct(validation_set)
+    if config['check_document']:
+        doc_idx = []
+        for idx in range(200):
+            doc_idx.append(random.randint(0, len(validation_set)-1))
+        # visualize documents
+        for idx in doc_idx:
+            # get recontruct result
+            recon_list, target_list, doc_list = model.get_reconstruct(validation_set)
 
-        # get ranking index
-        recon_rank_list = np.zeros((len(recon_list), len(tp.vocab)), dtype='float32')
-        target_rank_list = np.zeros((len(recon_list), len(tp.vocab)), dtype='float32')
-        for i in range(len(recon_list)):
-            recon_rank_list[i] = np.argsort(recon_list[i])[::-1]
-            target_rank_list[i] = np.argsort(target_list[i])[::-1]
+            # get ranking index
+            recon_rank_list = np.zeros((len(recon_list), len(tp.vocab)), dtype='float32')
+            target_rank_list = np.zeros((len(recon_list), len(tp.vocab)), dtype='float32')
+            for i in range(len(recon_list)):
+                recon_rank_list[i] = np.argsort(recon_list[i])[::-1]
+                target_rank_list[i] = np.argsort(target_list[i])[::-1]
 
-        # show info
-        record = open('./'+config['dataset']+'_'+config['model']+'_'+config['encoder']+'_'+config['target']+'_document.txt', 'a')
-        doc_topics_distribution = model.get_doc_topic_distribution(validation_set)
-        doc_topics = model.get_topic_lists()[np.argmax(doc_topics_distribution[idx])]
-        print('Documents ', idx)
-        record.write('Documents '+str(idx)+'\n')
-        print(doc_list[idx])
-        record.write(doc_list[idx])
-        print('---------------------------------------')
-        record.write('\n---------------------------------------\n')
-        print('Topic of Document: ')
-        record.write('Topic of Document: \n')
-        print(doc_topics)
-        record.write(str(doc_topics))
-        print('---------------------------------------')
-        record.write('---------------------------------------\n')
-        print('[Predict] Top 10 Words in Document: ')
-        record.write('[Predict] Top 10 Words in Document: \n')
-        for word_idx in range(10):
-            print(dataset.idx2token[recon_rank_list[idx][word_idx]])
-            record.write(str(dataset.idx2token[recon_rank_list[idx][word_idx]])+'\n')
-        print('---------------------------------------')
-        record.write('---------------------------------------\n')
-        print('[Label] Top 10 Words in Document: ')
-        record.write('[Label] Top 10 Words in Document: \n')
-        for idx in range(10):
-            print(dataset.idx2token[target_rank_list[idx][idx]])
-            record.write(str(dataset.idx2token[target_rank_list[idx][idx]])+'\n')
-        print('---------------------------------------\n')
-        record.write('---------------------------------------\n\n')
+            # show info
+            record = open('./'+config['dataset']+'_'+config['model']+'_'+config['encoder']+'_'+config['target']+'_document.txt', 'a')
+            doc_topics_distribution = model.get_doc_topic_distribution(validation_set)
+            doc_topics = model.get_topic_lists()[np.argmax(doc_topics_distribution[idx])]
+            print('Documents ', idx)
+            record.write('Documents '+str(idx)+'\n')
+            print(doc_list[idx])
+            record.write(doc_list[idx])
+            print('---------------------------------------')
+            record.write('\n---------------------------------------\n')
+            print('Topic of Document: ')
+            record.write('Topic of Document: \n')
+            print(doc_topics)
+            record.write(str(doc_topics))
+            print('---------------------------------------')
+            record.write('---------------------------------------\n')
+            print('[Predict] Top 10 Words in Document: ')
+            record.write('[Predict] Top 10 Words in Document: \n')
+            for word_idx in range(10):
+                print(dataset.idx2token[recon_rank_list[idx][word_idx]])
+                record.write(str(dataset.idx2token[recon_rank_list[idx][word_idx]])+'\n')
+            print('---------------------------------------')
+            record.write('---------------------------------------\n')
+            print('[Label] Top 10 Words in Document: ')
+            record.write('[Label] Top 10 Words in Document: \n')
+            for idx in range(10):
+                print(dataset.idx2token[target_rank_list[idx][idx]])
+                record.write(str(dataset.idx2token[target_rank_list[idx][idx]])+'\n')
+            print('---------------------------------------\n')
+            record.write('---------------------------------------\n\n')

@@ -94,12 +94,12 @@ class CTM:
         self.activation = activation
         self.dropout = dropout
         self.learn_priors = learn_priors
-        self.batch_size = batch_size
-        self.lr = lr
+        self.batch_size = config['batch_size']
+        self.lr = config['lr']
         self.contextual_size = contextual_size
         self.momentum = momentum
         self.solver = solver
-        self.num_epochs = num_epochs
+        self.num_epochs = config['epochs']
         self.reduce_on_plateau = reduce_on_plateau
         self.num_data_loader_workers = num_data_loader_workers
         self.training_doc_topic_distributions = None
@@ -119,7 +119,7 @@ class CTM:
 
         ### casimir
         self.model = DecoderNetwork(
-            bow_size, self.contextual_size, inference_type, n_components, model_type, hidden_sizes, activation,
+            config, bow_size, self.contextual_size, inference_type, n_components, model_type, hidden_sizes, activation,
             dropout, learn_priors, label_size=label_size, vocab_size=len(vocab), word_embedding = word_embeddings)
         ### 
 
@@ -128,10 +128,10 @@ class CTM:
         # init optimizer
         if self.solver == 'adam':
             self.optimizer = optim.Adam(
-                self.model.parameters(), lr=lr, betas=(self.momentum, 0.99))
+                self.model.parameters(), lr=config['lr'], betas=(self.momentum, 0.99), weight_decay=config['weight_decay'])
         elif self.solver == 'sgd':
             self.optimizer = optim.SGD(
-                self.model.parameters(), lr=lr, momentum=self.momentum)
+                self.model.parameters(), lr=config['lr'], momentum=self.momentum)
 
         # init lr scheduler
         if self.reduce_on_plateau:
@@ -355,7 +355,7 @@ class CTM:
                 val_res, dist_res = self._predict(validation_loader)
                 npmi = CoherenceNPMI(texts=self.texts, topics=self.get_topic_lists(10))
                 diversity = InvertedRBO(topics=self.get_topic_lists(10))
-                record = open('./'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['encoder']+'_'+self.config['target']+'.txt', 'a')
+                record = open('./'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['activation']+'_'+self.config['encoder']+'_'+self.config['target']+'_lr'+self.config['lr']+'batch'+self.config['barch_size']+'_weightdecay'+self.config['weight_decay']+'.txt', 'a')
                 print('---------------------------------------')
                 record.write('-------------------------------------------------\n')
                 print('EPOCH', epoch + 1)
