@@ -186,7 +186,7 @@ class DNNDecoderDataset(Dataset):
 # In[ ]:
 
 
-def prepare_dataloader(doc_embs, targets, batch_size=100, train_valid_test_ratio=[0.7, 0.1, 0.2],                       target_normalize=False, seed=123):
+def prepare_dataloader(doc_embs, targets, batch_size=100, train_valid_test_ratio=[0.7, 0.1, 0.2], target_normalize=False, seed=123):
     train_size = int(len(doc_embs) * train_valid_test_ratio[0])
     valid_size = int(len(doc_embs) * (train_valid_test_ratio[0] + train_valid_test_ratio[1])) - train_size
     test_size = len(doc_embs) - train_size - valid_size
@@ -228,7 +228,9 @@ def prepare_dataloader(doc_embs, targets, batch_size=100, train_valid_test_ratio
 
 
 # prepare dataloader
-train_loader, valid_loader, test_loader = prepare_dataloader(doc_embs, targets, batch_size=100,                                                             train_valid_test_ratio=[0.7, 0.1, 0.2],target_normalize=False,                                                             seed=seed)
+train_loader, valid_loader, test_loader = prepare_dataloader(doc_embs, targets, batch_size=100, \
+                                                            train_valid_test_ratio=[0.7, 0.1, 0.2],target_normalize=True,\
+                                                            seed=seed)
 
 
 # In[ ]:
