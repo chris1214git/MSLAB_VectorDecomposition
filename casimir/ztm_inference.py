@@ -4,11 +4,17 @@ from itertools import product
 
 parser = argparse.ArgumentParser(description='document decomposition.')
 parser.add_argument('--dataset', type=str, default="20news")
+parser.add_argument('--encoder', type=str, default="all")
 args = parser.parse_args()
 config = vars(args)
 
 activation_list = ['sigmoid', 'tanh']
-encoder_list = ['mpnet', 'bert', 'average', 'roberta']
+if config['encoder'] == 'all':
+    encoder_list = ['mpnet', 'bert', 'average', 'doc2vec']
+elif config['encoder'] == 'transformer':
+    encoder_list = ['mpnet', 'bert']
+else:
+    encoder_list = ['average', 'doc2vec']
 lr_list = [5e-2, 1e-2, 5e-3, 1e-3, 5e-4, 1e-4]
 weight_decay_list = [0, 1e-1, 1e-2, 1e-3]
 batch_size_list = [8, 16, 32]

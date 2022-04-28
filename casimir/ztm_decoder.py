@@ -62,7 +62,13 @@ if __name__ =='__main__':
     texts = [text.split() for text in preprocessed_corpus]
 
     # generating document embedding
-    doc_embs, doc_model = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
+    while True:
+        try:
+            doc_embs, doc_model = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
+            break
+        except:
+            print('[Error] CUDA Memory Insufficient, retry after 15 secondes.')
+            time.sleep(15)
 
     # Decode target & Vocabulary
     labels, vocabularys= get_preprocess_document_labels(preprocessed_corpus)
