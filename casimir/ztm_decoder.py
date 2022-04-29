@@ -64,7 +64,7 @@ if __name__ =='__main__':
     # generating document embedding
     while True:
         try:
-            doc_embs, doc_model = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
+            doc_embs, doc_model, device = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
             break
         except:
             print('[Error] CUDA Memory Insufficient, retry after 15 secondes.')
@@ -101,11 +101,11 @@ if __name__ =='__main__':
     while True:
         try:
             if config['model'] == 'CombinedTM':
-                model = CombinedTM(bow_size=len(tp.vocab), contextual_size=contextual_size, n_components=config['topic_num'], num_epochs=config['epochs'], config=config, texts=texts, vocab = tp.vocab, word_embeddings=word_embeddings, idx2token=dataset.idx2token)
+                model = CombinedTM(bow_size=len(tp.vocab), contextual_size=contextual_size, n_components=config['topic_num'], num_epochs=config['epochs'], config=config, texts=texts, vocab = tp.vocab, word_embeddings=word_embeddings, idx2token=dataset.idx2token, device=device)
             elif config['model'] == 'mlp':
                 model = MLPDecoder(bow_size=len(tp.vocab), contextual_size=contextual_size, num_epochs=config['epochs'], config=config, texts=texts,vocab = tp.vocab, word_embeddings=word_embeddings, idx2token=dataset.idx2token)
             else:
-                model = ZeroShotTM(bow_size=len(tp.vocab), contextual_size=contextual_size, n_components=config['topic_num'], num_epochs=config['epochs'], config=config, texts=texts, vocab = tp.vocab, word_embeddings=word_embeddings, idx2token=dataset.idx2token)
+                model = ZeroShotTM(bow_size=len(tp.vocab), contextual_size=contextual_size, n_components=config['topic_num'], num_epochs=config['epochs'], config=config, texts=texts, vocab = tp.vocab, word_embeddings=word_embeddings, idx2token=dataset.idx2token, device=device)
             model.fit(training_set, validation_set)
             break
         except:

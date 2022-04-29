@@ -53,12 +53,9 @@ class CTM:
     def __init__(self, bow_size, contextual_size, inference_type="combined", n_components=10, model_type='prodLDA',
                  hidden_sizes=(100, 100), activation='softplus', dropout=0.2, learn_priors=True, batch_size=32,
                  lr=2e-3, momentum=0.99, solver='adam', num_epochs=100, reduce_on_plateau=False,
-                 num_data_loader_workers=mp.cpu_count(), label_size=0, loss_weights=None, config=None, texts=None, vocab = None, word_embeddings=None, idx2token=None):
+                 num_data_loader_workers=mp.cpu_count(), label_size=0, loss_weights=None, config=None, texts=None, vocab = None, word_embeddings=None, idx2token=None, device=None):
     ###
-        if torch.cuda.is_available():
-            self.device = get_free_gpu()
-        else:
-            self.device = torch.device("cpu")
+        self.device = device
 
 
         if self.__class__.__name__ == "CTM":

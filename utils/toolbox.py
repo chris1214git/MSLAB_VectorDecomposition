@@ -327,14 +327,15 @@ def get_preprocess_document_embs(preprocessed_docs, model_name):
                     model (class): 
     '''
     print('Getting preprocess documents embeddings')
+    device = get_free_gpu()
     if model_name == 'bert':
-        model = SentenceTransformer("bert-base-uncased", device=get_free_gpu())
+        model = SentenceTransformer("bert-base-uncased", device=device)
         doc_embs = np.array(model.encode(preprocessed_docs, show_progress_bar=True, batch_size=200))
     elif model_name == 'mpnet':
-        model = SentenceTransformer("all-mpnet-base-v2", device=get_free_gpu())
+        model = SentenceTransformer("all-mpnet-base-v2", device=device)
         doc_embs = np.array(model.encode(preprocessed_docs, show_progress_bar=True, batch_size=200))
     elif model_name == 'average':
-        model = SentenceTransformer("average_word_embeddings_glove.840B.300d", device=get_free_gpu())
+        model = SentenceTransformer("average_word_embeddings_glove.840B.300d", device=device)
         doc_embs = np.array(model.encode(preprocessed_docs, show_progress_bar=True, batch_size=200))
     elif model_name == 'doc2vec':
         doc_embs = []
@@ -345,7 +346,7 @@ def get_preprocess_document_embs(preprocessed_docs, model_name):
             doc_embs.append(model.infer_vector(preprocessed_docs_split[idx]))
         doc_embs = np.array(doc_embs)
 
-    return doc_embs, model   
+    return doc_embs, model, device  
 
 def get_word_embs(vocabularys, id2token=None, word_emb_file='../data/glove.6B.300d.txt', data_type='ndarray'):
     '''
