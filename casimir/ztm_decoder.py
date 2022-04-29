@@ -24,7 +24,7 @@ if __name__ =='__main__':
     parser.add_argument('--model', type=str, default="ZTM")
     parser.add_argument('--activation', type=str, default="sigmoid")
     parser.add_argument('--dataset', type=str, default="20news")
-    parser.add_argument('--use_pos', type=bool, default=False)
+    parser.add_argument('--use_pos', type=bool, default=True)
     parser.add_argument('--min_df', type=int, default=1)
     parser.add_argument('--max_df', type=float, default=1.0)
     parser.add_argument('--vocab_size', type=int, default=0)
@@ -62,7 +62,13 @@ if __name__ =='__main__':
     texts = [text.split() for text in preprocessed_corpus]
 
     # generating document embedding
-    doc_embs, doc_model = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
+    while True:
+        try:
+            doc_embs, doc_model = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
+            break
+        except:
+            print('[Error] CUDA Memory Insufficient, retry after 15 secondes.')
+            time.sleep(15)
 
     # Decode target & Vocabulary
     labels, vocabularys= get_preprocess_document_labels(preprocessed_corpus)
