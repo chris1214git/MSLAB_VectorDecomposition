@@ -217,14 +217,14 @@ class CTM:
             else:
                 labels = None
 
-            if self.USE_CUDA:
-                X_bow = X_bow.to(self.device)
-                X_contextual = X_contextual.to(self.device)
+            
+            X_bow = X_bow.to(self.device)
+            X_contextual = X_contextual.to(self.device)
 
             # forward pass
             self.model.zero_grad()
             prior_mean, prior_variance, posterior_mean, posterior_variance,\
-            posterior_log_variance, word_dists, estimated_labels, recon_dists = self.model(X_bow, X_contextual, labels)
+            posterior_log_variance, word_dists, estimated_labels, recon_dists = self.model(X_bow, X_contextual)
 
             ### casimir
             # backward pass
@@ -348,11 +348,11 @@ class CTM:
             
             ### casimir
             # (1) Customized evaluation
-            if (epoch + 1) % 10 == 0:
+            if  (epoch + 1) % 10 == 0:
                 val_res, dist_res = self._predict(validation_loader)
                 npmi = CoherenceNPMI(texts=self.texts, topics=self.get_topic_lists(10))
                 diversity = InvertedRBO(topics=self.get_topic_lists(10))
-                record = open('./'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['activation']+'_'+self.config['encoder']+'_'+self.config['target']+'_lr'+self.config['lr']+'batch'+self.config['barch_size']+'_weightdecay'+self.config['weight_decay']+'.txt', 'a')
+                record = open('./'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['activation']+'_'+self.config['encoder']+'_'+self.config['target']+'_lr'+str(self.config['lr'])+'_batch'+str(self.config['batch_size'])+'_weightdecay'+str(self.config['weight_decay'])+'.txt', 'a')
                 print('---------------------------------------')
                 record.write('-------------------------------------------------\n')
                 print('EPOCH', epoch + 1)
@@ -391,15 +391,15 @@ class CTM:
             else:
                 labels = None
 
-            if self.USE_CUDA:
-                X_bow = X_bow.to(self.device)
-                X_contextual = X_contextual.to(self.device)
+            
+            X_bow = X_bow.to(self.device)
+            X_contextual = X_contextual.to(self.device)
 
             # forward pass
             self.model.zero_grad()
             prior_mean, prior_variance, posterior_mean, posterior_variance, posterior_log_variance, word_dists, \
             estimated_labels, recon_dists =\
-                self.model(X_bow, X_contextual, labels)
+                self.model(X_bow, X_contextual)
             
             kl_loss, rl_loss, dl_loss = self._loss(X_bow, word_dists, prior_mean, prior_variance,
                               posterior_mean, posterior_variance, posterior_log_variance, recon_dists)
@@ -431,9 +431,9 @@ class CTM:
             X_bow = X_bow.reshape(X_bow.shape[0], -1)
             X_contextual = batch_dict['X_contextual']
 
-            if self.USE_CUDA:
-                X_bow = X_bow.to(self.device)
-                X_contextual = X_contextual.to(self.device)
+            
+            X_bow = X_bow.to(self.device)
+            X_contextual = X_contextual.to(self.device)
 
             # forward pass
             self.model.zero_grad()
@@ -504,9 +504,9 @@ class CTM:
             # label list
             bow_lists.append(X_bow)
 
-            if self.USE_CUDA:
-                X_bow = X_bow.to(self.device)
-                X_contextual = X_contextual.to(self.device)
+            
+            X_bow = X_bow.to(self.device)
+            X_contextual = X_contextual.to(self.device)
 
             # forward pass
             self.model.zero_grad()
