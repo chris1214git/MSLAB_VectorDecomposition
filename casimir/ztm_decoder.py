@@ -54,6 +54,8 @@ if __name__ =='__main__':
         config['min_df'], config['max_df'], config['min_doc_word'] = 50, 1.0, 15
     elif config['dataset'] == 'agnews':
         config['min_df'], config['max_df'], config['min_doc_word'] = 100, 1.0, 15
+    elif config['dataset'] == 'IMDB':
+        config['min_df'], config['max_df'], config['min_doc_word'] = 100, 1.0, 15
     elif config['dataset'] == 'tweet':
         config['min_df'], config['max_df'], config['min_doc_word'] = 5, 1.0, 15
 
