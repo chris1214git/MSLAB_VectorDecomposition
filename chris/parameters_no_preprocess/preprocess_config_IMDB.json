@@ -1,0 +1,1 @@
+{"dataset": "IMDB", "min_df": 1, "max_df": 1.0, "vocabulary_size": null, "min_doc_word": 15, "use_pos":false}
