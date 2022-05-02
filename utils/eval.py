@@ -165,6 +165,65 @@ def semantic_precision_all(preds, target, word_embeddings, tp_vocab, k = [10], t
     
     return precision_scores, word_result
 
+def semantic_precision_all_v2(preds, target, word_embeddings, tp_vocab, k = [10], th = 0.7, display_word_result=False):
+    """Computes `TopK precision`_ (for information retrieval).
+    Different:
+        select topk ground truth
+
+    Args:
+    (1) preds: tensor with 2d shape
+    (2) target: tensor with 2d shape
+    (3) word_embeddings: word_embeddings matrix tensor with 2d shape(v, d)
+    (4) k: a list of integer
+    (5) th: threshold of word embeddings cosine similarity
+    (5) display_word_result: whether to display ground truth, prediction & hit words
+
+    Return:
+    (1) precision_scores: dict
+        key -> k, value -> average precision score
+
+    """
+    assert preds.shape == target.shape and max(k) <= preds.shape[-1]
+    # assert preds.shape[1] == word_embeddings.shape[0]
+    
+    if not isinstance(k, list):
+        print(k)
+        print(word_embeddings.shape)
+        raise ValueError("`k` has to be a list of positive integer")
+        
+    precision_scores = {}
+    # target_onehot = target > 0
+    vocab = np.array(tp_vocab)
+    word_result = defaultdict(list)
+    device = preds.device
+    
+    for topk in k:
+        topk_values, indices = torch.topk(target, topk)
+        target_topk = torch.zeros(target.shape).to(device).scatter_(1, indices, topk_values)
+        target_onehot = target_topk > 0
+        
+        relevants = []
+        for i in range(preds.shape[0]):
+            preds_word_emb = word_embeddings[preds[i].topk(topk)[1]]
+            target_word_emb = word_embeddings[target_onehot[i]]
+            
+            similarity_matrix = torch.zeros(preds_word_emb.shape[0], target_word_emb.shape[0])
+            for j in range(preds_word_emb.shape[0]):
+                similarity_matrix[j] = torch.nn.functional.cosine_similarity(preds_word_emb[j].view(1, -1), target_word_emb)
+                
+            max_similarity_score, max_similarity_idx = torch.max(similarity_matrix, dim=1)
+            max_similarity_idx = max_similarity_idx[max_similarity_score >= th]
+            relevant = len(torch.unique(max_similarity_idx)) / topk
+            relevants.append(relevant)
+            if topk == 10 and display_word_result:
+                word_result['ground truth'].append(vocab[target_onehot[i].cpu().numpy()])
+                word_result['prediction'].append(vocab[preds[i].topk(topk)[1].cpu().numpy()])
+                word_result['hit'].append(vocab[target_onehot[i].cpu().numpy()][max_similarity_idx.cpu().numpy()])
+                
+        precision_scores[topk] = np.mean(relevants)
+    
+    return precision_scores, word_result
+
 def evaluate_downstream(document_vectors, targets, train_dataset, test_dataset):
     # LR 
     train_x = document_vectors[train_dataset.indices,:]

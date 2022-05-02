@@ -28,10 +28,12 @@ from tqdm.auto import tqdm
 import matplotlib.pyplot as plt
 
 sys.path.append('../')
-from utils.eval import retrieval_normalized_dcg_all, retrieval_precision_all, semantic_precision_all, semantic_precision_all_v2, precision_recall_f1_all
+from utils.eval import retrieval_normalized_dcg_all, retrieval_precision_all, semantic_precision_all, precision_recall_f1_all
 from utils.loss import *
 from utils.data_loader import load_document
-from utils.toolbox import preprocess_document, get_preprocess_document, get_preprocess_document_embs,                          get_preprocess_document_labels, get_preprocess_document_labels_v2, get_word_embs,                          get_free_gpu, merge_targets
+from utils.toolbox import preprocess_document, get_preprocess_document, get_preprocess_document_embs, \
+                          get_preprocess_document_labels, get_preprocess_document_labels_v2, get_word_embs,\
+                          get_free_gpu
 
 
 # ## Data preprocess
@@ -60,7 +62,6 @@ from utils.toolbox import preprocess_document, get_preprocess_document, get_prep
 import argparse
 parser = argparse.ArgumentParser(description='dnn decoder baseline')
 parser.add_argument('--dataset', type=str, default="20news")
-parser.add_argument('--dataset2', type=str, default=None)
 parser.add_argument('--model_name', type=str, default='average')
 parser.add_argument('--label_type', type=str, default='bow')
 parser.add_argument('--eval_f1', action="store_true")
@@ -75,107 +76,76 @@ args = parser.parse_args()
 config = vars(args)
 
 dataset = config['dataset']
-# cross domain
-dataset2 = config['dataset2']
 model_name = config['model_name']
 label_type = config['label_type']
-# 用binary(f1) evaluation或rank evaluation
 eval_f1 = config['eval_f1']
 criterion = config['criterion']
-# 選preprocess config
 preprocess_config_dir = config['preprocess_config_dir']
-n_gram =  config['n_gram']
+n_gram = config['n_gram']
 
-# 訓練幾次
 n_time = config['n_time']
 seed = config['seed']
-if dataset2:
-    experiment_dir = f'cross_{dataset}_{dataset2}_{model_name}_{label_type}_{criterion}'
-else:
-    experiment_dir = f'{dataset}_{model_name}_{label_type}_{criterion}'
-    
-save_dir = 'default'
+experiment_dir = f'{dataset}_{model_name}_{label_type}_{criterion}'
+experiment_dir2 = config['save_dir']
 
-config = {}
 config['experiment_dir'] = experiment_dir
-config['preprocess_config_dir'] = preprocess_config_dir
-config['save_dir'] = save_dir
-config['dataset'] = dataset
-config['dataset2'] = dataset2
-config['model_name'] = model_name
-config['label_type'] = label_type
-config['eval_f1'] = eval_f1
-config['n_gram'] = n_gram
-config['criterion'] = criterion
-config['n_time'] = n_time
-config['seed'] = seed
-
 save_dir = os.path.join('experiment', config['experiment_dir'], config['save_dir'])
 os.makedirs(save_dir, exist_ok=False)
-
 
 # In[3]:
 
 
-def load_training_data(config, dataset):
-    preprocess_config_dir = config['preprocess_config_dir']
-    with open(os.path.join(f'../chris/{preprocess_config_dir}', f'preprocess_config_{dataset}.json'), 'r') as f:
-        preprocess_config = json.load(f)
-        
-    # load preprocess dataset
-    unpreprocessed_docs, preprocessed_docs = get_preprocess_document(**preprocess_config)
-    print('doc num', len(preprocessed_docs))
+with open(os.path.join(f'../chris/{preprocess_config_dir}', f'preprocess_config_{dataset}.json'), 'r') as f:
+    preprocess_config = json.load(f)
 
-    # get document embeddings
-    doc_embs, doc_model, device = get_preprocess_document_embs(preprocessed_docs, model_name)
-    print('doc_embs', doc_embs.shape)
-    
-    # load labels
-    labels, vocabularys = get_preprocess_document_labels_v2(preprocessed_docs, preprocess_config, preprocess_config_dir, config['n_gram'])    
-    # check nonzero numbers
-    for k in labels:
-        print(k, np.sum(labels[k]!=0), labels[k].shape)
-    print(len(vocabularys))
-    # select label type
-    targets = labels[config['label_type']].toarray()
-    vocabularys = vocabularys
-    
-    return unpreprocessed_docs ,preprocessed_docs, doc_embs, targets, vocabularys, device
+unpreprocessed_docs ,preprocessed_docs = get_preprocess_document(**preprocess_config)
+print('doc num', len(preprocessed_docs))
 
 
 # In[4]:
 
 
-unpreprocessed_docs, preprocessed_docs, doc_embs, targets, vocabularys, device = load_training_data(config, config['dataset'])
+doc_embs, doc_model = get_preprocess_document_embs(preprocessed_docs, model_name)
+print('doc_embs', doc_embs.shape)
 
 
 # In[5]:
 
 
-if config['dataset2'] is not None:
-    unpreprocessed_docs2, preprocessed_docs2, doc_embs2, targets2, vocabularys2 = load_training_data(config, config['dataset2'])
-    targets, targets2, vocabularys = merge_targets(targets, targets2, vocabularys, vocabularys2)
-    
+labels, vocabularys = get_preprocess_document_labels_v2(preprocessed_docs, preprocess_config, preprocess_config_dir, config['n_gram'])
 
 
 # In[6]:
 
 
+for k in labels:
+    print(k, np.sum(labels[k]!=0), labels[k].shape)
+print(len(vocabularys))
+
+
+# In[ ]:
+
+
+targets = labels[config['label_type']].toarray() 
+vocabularys = vocabularys
 word_embs = get_word_embs(vocabularys)
 print('word_embs', word_embs.shape)
+
+
+# In[ ]:
+
+
 word_embs_tensor = torch.FloatTensor(word_embs)
 
 
 # ## MLP Decoder
 
-# In[7]:
+# In[ ]:
 
 
-# device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-# device = 'cpu'
 
 
-# In[8]:
+# In[ ]:
 
 
 class DNNDecoderDataset(Dataset):
@@ -195,10 +165,21 @@ class DNNDecoderDataset(Dataset):
         return len(self.doc_embs)
 
 
-# In[10]:
+# In[ ]:
 
 
-def prepare_dataloader(doc_embs, targets, batch_size=100, train_valid_test_ratio=[0.7, 0.1, 0.2],                       target_normalize=False, seed=123):
+#             nn.Linear(input_dim, input_dim*4),
+#             nn.BatchNorm1d(input_dim*4),
+#             nn.Sigmoid(),
+#             nn.Linear(input_dim*4, output_dim),
+#             nn.BatchNorm1d(output_dim),
+#             nn.Sigmoid(),
+
+
+# In[ ]:
+
+
+def prepare_dataloader(doc_embs, targets, batch_size=100, train_valid_test_ratio=[0.7, 0.1, 0.2], target_normalize=False, seed=123):
     train_size = int(len(doc_embs) * train_valid_test_ratio[0])
     valid_size = int(len(doc_embs) * (train_valid_test_ratio[0] + train_valid_test_ratio[1])) - train_size
     test_size = len(doc_embs) - train_size - valid_size
@@ -236,16 +217,16 @@ def prepare_dataloader(doc_embs, targets, batch_size=100, train_valid_test_ratio
     return train_loader, valid_loader, test_loader
 
 
-# In[11]:
+# In[ ]:
 
 
 # prepare dataloader
-train_loader, valid_loader, test_loader = prepare_dataloader(doc_embs, targets, batch_size=100,                                                             train_valid_test_ratio=[0.7, 0.1, 0.2],target_normalize=True,                                                             seed=seed)
-if config['dataset2'] is not None:
-    _, _, test_loader = prepare_dataloader(doc_embs2, targets2, batch_size=100,                                                             train_valid_test_ratio=[0.7, 0.1, 0.2],target_normalize=True,                                                             seed=seed)
+train_loader, valid_loader, test_loader = prepare_dataloader(doc_embs, targets, batch_size=100, \
+                                                            train_valid_test_ratio=[0.7, 0.1, 0.2],target_normalize=True,\
+                                                            seed=seed)
 
 
-# In[12]:
+# In[ ]:
 
 
 class DNNDecoder(nn.Module):
@@ -266,7 +247,7 @@ class DNNDecoder(nn.Module):
         return self.decoder(x)
 
 
-# In[13]:
+# In[ ]:
 
 
 def evaluate_DNNDecoder(model, data_loader, config, pred_semantic=False):
@@ -293,11 +274,6 @@ def evaluate_DNNDecoder(model, data_loader, config, pred_semantic=False):
             for k, v in precision_scores.items():
                 results['precision@{}'.format(k)].append(v)
 
-            # Precision
-            precision_scores = retrieval_precision_all_v2(pred, target, k=config["valid_topk"])
-            for k, v in precision_scores.items():
-                results['precisionv2@{}'.format(k)].append(v)
-
             # NDCG
             ndcg_scores = retrieval_normalized_dcg_all(pred, target, k=config["valid_topk"])
             for k, v in ndcg_scores.items():
@@ -305,7 +281,7 @@ def evaluate_DNNDecoder(model, data_loader, config, pred_semantic=False):
             
             # Semantic Precision
             if pred_semantic:
-                semantic_precision_scores, word_result = semantic_precision_all_v2(pred, target, word_embs_tensor, vocabularys,                                                                                k=config["valid_topk"], th=0.7, display_word_result=False)
+                semantic_precision_scores, word_result = semantic_precision_all(pred, target, word_embs_tensor, vocabularys,                                                                                k=config["valid_topk"], th=0.7, display_word_result=False)
                 for k, v in semantic_precision_scores.items():
                     results['semantic_precision@{}'.format(k)].append(v)
 
@@ -315,45 +291,7 @@ def evaluate_DNNDecoder(model, data_loader, config, pred_semantic=False):
     return results
 
 
-# In[14]:
-
-
-def retrieval_precision_all_v2(preds, target, k = [10]):
-    """Computes `TopK precision`_ (for information retrieval).
-    # ref: https://discuss.pytorch.org/t/how-to-use-torch-topk-to-set-non-topk-values-of-a-tensor-to-zero/3985
-    Different from v1:
-        select topk ground truth only
-    Args:
-    (1) preds: tensor with 2d shape
-    (2) target: tensor with 2d shape
-    (3) k: a list of integer
-    Return:
-    (1) precision_scores: dict
-        key -> k, value -> average precision score
-    """
-    assert preds.shape == target.shape and max(k) <= preds.shape[-1]
-    
-    if not isinstance(k, list):
-        raise ValueError("`k` has to be a list of positive integer")
-        
-    precision_scores = {}
-    device = preds.device
-    
-    for topk in k:
-        # topk has value
-        topk_values, indices = torch.topk(target, topk)
-        target_topk = torch.zeros(target.shape).to(device).scatter_(1, indices, topk_values)
-        target_onehot_topk = target_topk > 0
-
-        relevant = target_onehot_topk.gather(1, preds.topk(topk, dim=-1)[1])
-        relevant = relevant.sum(axis=1).float()
-        relevant /= topk    
-        precision_scores[topk] = relevant.mean().item()
-    
-    return precision_scores
-
-
-# In[15]:
+# In[ ]:
 
 
 def calculate_loss(train_train_config, criterion, pred, target, target_rank, target_topk):
@@ -450,7 +388,6 @@ def train_decoder(doc_embs, targets, train_config):
                 print()
                 print('train', train_res_ndcg)
                 print('valid', valid_res_ndcg)
-                print('test', test_res_ndcg)
     return results
 
 def train_experiment(n_time):
@@ -466,7 +403,7 @@ def train_experiment(n_time):
     return results
 
 
-# In[16]:
+# In[ ]:
 
 
 train_config = {
@@ -487,10 +424,10 @@ train_config = {
 }
 
 
-
 # In[ ]:
 
 
+device = get_free_gpu()#'cuda:0' if torch.cuda.is_available() else 'cpu'
 train_experiment(train_config['n_time'])
 
 

@@ -323,6 +323,41 @@ def get_preprocess_document_labels_v2(preprocessed_docs, preprocess_config, prep
     labels['yake'] = yake_vector
     
     return labels, vocabulary
+    
+def merge_targets(targets, targets2, vocabularys, vocabularys2):
+    # ref: https://numpy.org/doc/stable/reference/generated/numpy.put_along_axis.html#numpy.put_along_axis
+    vocabularys_all = list(vocabularys)
+    vocabularys2_map_idx = []
+    
+    for s in vocabularys2:
+        if s in vocabularys_all:
+            idx = vocabularys_all.index(s)
+            vocabularys2_map_idx.append(idx)
+        else:
+            vocabularys_all.append(s)
+            vocabularys2_map_idx.append(len(vocabularys_all)-1)
+            
+    print('vocabularys len', len(vocabularys))
+    print('vocabularys2 len', len(vocabularys2))
+    print('merge len', len(vocabularys_all))
+    mr = (len(vocabularys_all) - len(vocabularys)) / len(vocabularys2)
+    print('vocabularys2 missing ratio', mr)
+    
+    new_targets = np.zeros((targets.shape[0], len(vocabularys_all)))
+    new_targets2 = np.zeros((targets2.shape[0], len(vocabularys_all)))
+    
+    idx1 = np.arange(targets.shape[1])
+    idx1 = np.repeat(idx1.reshape(1, -1), targets.shape[0], axis=0)
+    np.put_along_axis(new_targets, idx1, targets, axis=1)
+    
+    assert len(vocabularys2_map_idx) == len(vocabularys2)
+    idx2 = np.array(vocabularys2_map_idx)
+    idx2 = np.repeat(idx2.reshape(1, -1), targets2.shape[0], axis=0)
+    np.put_along_axis(new_targets2, idx2, targets2, axis=1)
+    
+    assert new_targets.shape[1] == new_targets2.shape[1] == len(vocabularys_all)
+    
+    return new_targets, new_targets2, np.array(vocabularys_all)
 
 def get_preprocess_document_embs(preprocessed_docs, model_name):
     '''
