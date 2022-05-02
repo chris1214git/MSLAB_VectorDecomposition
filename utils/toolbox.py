@@ -4,11 +4,13 @@ import sys
 import nltk
 import torch
 import numpy as np
+import json
 from math import log
 from tqdm.auto import tqdm
 from sentence_transformers import SentenceTransformer
 from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 from torch.utils.data import DataLoader, random_split
+from scipy import sparse
 
 sys.path.append("../")
 from utils.preprocessing import WhiteSpacePreprocessing, WhiteSpacePreprocessingStopwords, WhiteSpacePreprocessing_v2
@@ -293,18 +295,25 @@ def get_preprocess_document_labels_v2(preprocessed_docs, preprocess_config, prep
                     vocabulary (dict): bow, tf-idf
     '''
     print('Getting preprocess documents labels')
-
     print('Finding precompute_keyword by preprocess_config', preprocess_config)
-    preprocess_config_dir2 = 'keyword'
-    for k, v in preprocess_config.items():
-        preprocess_config_dir2 += f'_{k}_{v}'
-    preprocess_config_dir2 += f'_ngram_{ngram}'
-    config_dir = os.path.join('../data/precompute_keyword', preprocess_config_dir, preprocess_config_dir2)
-    
-    tf_idf_vector = np.load(os.path.join(config_dir, 'TFIDF.npy'))
-    bow_vector = np.load(os.path.join(config_dir, 'BOW.npy'))
-    keybert_vector = np.load(os.path.join(config_dir, 'KeyBERT.npy'))
-    yake_vector = np.load(os.path.join(config_dir, 'YAKE.npy'))
+
+    config_dir = os.path.join('../data/precompute_keyword', preprocess_config_dir, \
+                              '{}_ngram_{}'.format(preprocess_config['dataset'], ngram))
+    # check preprocess config the same when loading precompute labels
+    with open(os.path.join(config_dir, 'preprocess_config.json'), 'r') as f:
+        preprocess_config2 = json.load(f)
+        assert preprocess_config == preprocess_config2
+
+    tf_idf_vector = sparse.load_npz(os.path.join(config_dir, 'TFIDF.npz'))
+    bow_vector = sparse.load_npz(os.path.join(config_dir, 'BOW.npz'))
+    try:
+        keybert_vector = sparse.load_npz(os.path.join(config_dir, 'KeyBERT.npz'))
+        yake_vector = sparse.load_npz(os.path.join(config_dir, 'YAKE.npz'))
+    except:
+        print('no precompute keyword')
+        keybert_vector = None
+        yake_vector = None
+
     vocabulary = np.load(os.path.join(config_dir, 'vocabulary.npy'))
 
     labels = {}

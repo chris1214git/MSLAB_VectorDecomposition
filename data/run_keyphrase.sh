@@ -1,11 +1,21 @@
-python3 keyword_extract_v2.py --ngram 1 --dataset tweet 
-# python3 keyword_extract_v2.py --ngram 2 --dataset tweet
-# python3 keyword_extract_v2.py --ngram 3 --dataset tweet
-python3 keyword_extract_v2.py --ngram 1 --dataset 20news
-# python3 keyword_extract_v2.py --ngram 2 --dataset 20news
-# python3 keyword_extract_v2.py --ngram 3 --dataset 20news
-python3 keyword_extract_v2.py --ngram 1 --dataset agnews
-# python3 keyword_extract_v2.py --ngram 2 --dataset agnews
-# python3 keyword_extract_v2.py --ngram 3 --dataset agnews
+# no_keyword
+python3 keyword_extract_v2.py --ngram 1 --dataset 20news --preprocess_config_dir parameters_baseline --no_keyword
+python3 keyword_extract_v2.py --ngram 1 --dataset agnews --preprocess_config_dir parameters_baseline --no_keyword
+python3 keyword_extract_v2.py --ngram 1 --dataset IMDB --preprocess_config_dir parameters_baseline --no_keyword
+python3 keyword_extract_v2.py --ngram 1 --dataset wiki --preprocess_config_dir parameters_baseline --no_keyword
 
+python3 keyword_extract_v2.py --ngram 1 --dataset 20news --preprocess_config_dir parameters_baseline2 --no_keyword
+python3 keyword_extract_v2.py --ngram 1 --dataset agnews --preprocess_config_dir parameters_baseline2 --no_keyword
+python3 keyword_extract_v2.py --ngram 1 --dataset IMDB --preprocess_config_dir parameters_baseline2 --no_keyword
+python3 keyword_extract_v2.py --ngram 1 --dataset wiki --preprocess_config_dir parameters_baseline2 --no_keyword
 
+# origin
+python3 keyword_extract_v2.py --ngram 1 --dataset 20news --preprocess_config_dir parameters_baseline
+python3 keyword_extract_v2.py --ngram 1 --dataset agnews --preprocess_config_dir parameters_baseline
+python3 keyword_extract_v2.py --ngram 1 --dataset IMDB --preprocess_config_dir parameters_baseline
+python3 keyword_extract_v2.py --ngram 1 --dataset wiki --preprocess_config_dir parameters_baseline
+
+python3 keyword_extract_v2.py --ngram 1 --dataset 20news --preprocess_config_dir parameters_baseline2
+python3 keyword_extract_v2.py --ngram 1 --dataset agnews --preprocess_config_dir parameters_baseline2
+python3 keyword_extract_v2.py --ngram 1 --dataset IMDB --preprocess_config_dir parameters_baseline2
+python3 keyword_extract_v2.py --ngram 1 --dataset wiki --preprocess_config_dir parameters_baseline2

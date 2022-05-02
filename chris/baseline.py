@@ -126,17 +126,10 @@ print(len(vocabularys))
 # In[ ]:
 
 
-targets = labels[config['label_type']] 
+targets = labels[config['label_type']].toarray() 
 vocabularys = vocabularys
 word_embs = get_word_embs(vocabularys)
 print('word_embs', word_embs.shape)
-
-
-# In[ ]:
-
-
-if config['label_type'] == 'yake':
-    targets = - targets
 
 
 # In[ ]:
@@ -419,7 +412,7 @@ train_config = {
     "weight_decay": 0.0,
     "loss_topk": 15,
     
-    "n_epoch": 200,
+    "n_epoch": 1000,
     "valid_epoch": 10,
     "valid_verbose": True,
     "valid_topk": [5, 10, 15],

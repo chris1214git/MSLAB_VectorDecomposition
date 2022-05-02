@@ -1,0 +1,1 @@
+{"dataset": "agnews", "model_name": "mpnet", "label_type": "tf-idf", "eval_f1": false, "criterion": "MSE", "n_gram": 1, "n_time": 3, "save_dir": "default", "preprocess_config_dir": "parameters_baseline", "seed": 123, "experiment_dir": "agnews_mpnet_tf-idf_MSE"}

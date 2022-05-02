@@ -75,6 +75,40 @@ def retrieval_precision_all(preds, target, k = [10]):
     
     return precision_scores
 
+def retrieval_precision_all_v2(preds, target, k = [10]):
+    """Computes `TopK precision`_ (for information retrieval).
+    # ref: https://discuss.pytorch.org/t/how-to-use-torch-topk-to-set-non-topk-values-of-a-tensor-to-zero/3985
+    Different from v1:
+        select topk ground truth only
+    Args:
+    (1) preds: tensor with 2d shape
+    (2) target: tensor with 2d shape
+    (3) k: a list of integer
+    Return:
+    (1) precision_scores: dict
+        key -> k, value -> average precision score
+    """
+    assert preds.shape == target.shape and max(k) <= preds.shape[-1]
+    
+    if not isinstance(k, list):
+        raise ValueError("`k` has to be a list of positive integer")
+        
+    precision_scores = {}
+    device = preds.device
+    
+    for topk in k:
+        # topk has value
+        topk_values, indices = torch.topk(target, topk)
+        target_topk = torch.zeros(target.shape).to(device).scatter_(1, indices, topk_values)
+        target_onehot_topk = target_topk > 0
+
+        relevant = target_onehot_topk.gather(1, preds.topk(topk, dim=-1)[1])
+        relevant = relevant.sum(axis=1).float()
+        relevant /= topk    
+        precision_scores[topk] = relevant.mean().item()
+    
+    return precision_scores
+
 def semantic_precision_all(preds, target, word_embeddings, tp_vocab, k = [10], th = 0.7, display_word_result=False):
     """Computes `TopK precision`_ (for information retrieval).
     Note:

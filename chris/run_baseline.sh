@@ -56,9 +56,18 @@ python3 baseline.py --dataset 20news --model_name bert --label_type tf-idf --cri
 python3 baseline.py --dataset 20news --model_name mpnet --label_type tf-idf --criterion MultiLabelMarginLossCustom --n_time 3
 
 # topk_MSE
-python3 baseline.py --dataset 20news --model_name average --label_type tf-idf --criterion MultiLabelMarginLossCustomV --n_time 3
-python3 baseline.py --dataset 20news --model_name doc2vec --label_type tf-idf --criterion MultiLabelMarginLossCustomV --n_time 3
-python3 baseline.py --dataset 20news --model_name bert --label_type tf-idf --criterion MultiLabelMarginLossCustomV --n_time 3
-python3 baseline.py --dataset 20news --model_name mpnet --label_type tf-idf --criterion MultiLabelMarginLossCustomV --n_time 3
+python3 baseline.py --dataset 20news --model_name average --label_type tf-idf --criterion MultiLabelMarginLossCustomV:15 --n_time 3
+python3 baseline.py --dataset 20news --model_name doc2vec --label_type tf-idf --criterion MultiLabelMarginLossCustomV:15 --n_time 3
+python3 baseline.py --dataset 20news --model_name bert --label_type tf-idf --criterion MultiLabelMarginLossCustomV:15 --n_time 3
+python3 baseline.py --dataset 20news --model_name mpnet --label_type tf-idf --criterion MultiLabelMarginLossCustomV:15 --n_time 3
 
+# ListNet
+python3 baseline.py --dataset 20news --model_name average --label_type tf-idf --criterion BCE --n_time 3 --preprocess_config_dir parameters_no_preprocess
+python3 baseline.py --dataset 20news --model_name doc2vec --label_type tf-idf --criterion BCE --n_time 3 --preprocess_config_dir parameters_no_preprocess
+python3 baseline.py --dataset 20news --model_name bert --label_type tf-idf --criterion BCE --n_time 3 --preprocess_config_dir parameters_no_preprocess
+python3 baseline.py --dataset 20news --model_name mpnet --label_type tf-idf --criterion BCE --n_time 3 --preprocess_config_dir parameters_no_preprocess
 
+python3 baseline.py --dataset 20news --model_name average --label_type tf-idf --criterion ListNet_sigmoid_L1 --n_time 3 --preprocess_config_dir parameters_no_preprocess
+python3 baseline.py --dataset 20news --model_name doc2vec --label_type tf-idf --criterion ListNet_sigmoid_L1 --n_time 3 --preprocess_config_dir parameters_no_preprocess
+python3 baseline.py --dataset 20news --model_name bert --label_type tf-idf --criterion ListNet_sigmoid_L1 --n_time 3 --preprocess_config_dir parameters_no_preprocess
+python3 baseline.py --dataset 20news --model_name mpnet --label_type tf-idf --criterion ListNet_sigmoid_L1 --n_time 3 --preprocess_config_dir parameters_no_preprocess
