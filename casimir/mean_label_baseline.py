@@ -8,7 +8,7 @@ from collections import defaultdict
 from torch.utils.data import Dataset, DataLoader, random_split
 
 sys.path.append("../")
-from utils.toolbox import same_seeds, show_settings, record_settings, get_preprocess_document, get_preprocess_document_embs, get_preprocess_document_labels, get_word_embs
+from utils.toolbox import get_free_gpu, same_seeds, show_settings, record_settings, get_preprocess_document, get_preprocess_document_embs, get_preprocess_document_labels, get_word_embs
 from utils.eval import retrieval_normalized_dcg_all, retrieval_precision_all, semantic_precision_all, retrieval_precision_all_v2, semantic_precision_all_v2
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
