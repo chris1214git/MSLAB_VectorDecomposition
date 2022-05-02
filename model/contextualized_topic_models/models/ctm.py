@@ -18,7 +18,7 @@ from contextualized_topic_models.utils.early_stopping.early_stopping import Earl
 from contextualized_topic_models.networks.decoding_network import DecoderNetwork
 ### casimir
 from contextualized_topic_models.evaluation.measures import CoherenceNPMI, TopicDiversity, InvertedRBO
-from utils.eval import retrieval_normalized_dcg_all, retrieval_precision_all, semantic_precision_all
+from utils.eval import retrieval_normalized_dcg_all, retrieval_precision_all_v2, semantic_precision_all
 from utils.toolbox import get_free_gpu, record_settings
 ###
 
@@ -450,7 +450,7 @@ class CTM:
                 results['[Recon] Semantic Precision@{}'.format(k)].append(v)
                 
             # Precision for reconstruct
-            precision_scores = retrieval_precision_all(recon_dists, X_bow, k=self.config['topk'])
+            precision_scores = retrieval_precision_all_v2(recon_dists, X_bow, k=self.config['topk'])
             for k, v in precision_scores.items():
                 results['[Recon] Precision@{}'.format(k)].append(v)
 
@@ -465,7 +465,7 @@ class CTM:
                 dists['[Word Dist] Semantic Precision@{}'.format(k)].append(v)
                 
             # Precision for word dist
-            precision_scores = retrieval_precision_all(word_dists, X_bow, k=self.config['topk'])
+            precision_scores = retrieval_precision_all_v2(word_dists, X_bow, k=self.config['topk'])
             for k, v in precision_scores.items():
                 dists['[Word Dist] Precision@{}'.format(k)].append(v)
 
