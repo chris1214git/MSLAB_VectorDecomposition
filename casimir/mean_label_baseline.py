@@ -92,7 +92,6 @@ if __name__ =='__main__':
     results = defaultdict(list)
     for batch, (pred, label) in enumerate(dataloader):
         pred, label = pred.to(device), label.to(device)
-        res = evaluate_Decoder(config, label, pred, vocabularys[config['target']], word_embeddings)
         # Semantic Prcision for reconstruct
         precision_scores, word_result = semantic_precision_all(pred, label, word_embeddings, vocabularys[config['target']], k=config['topk'], th = config['threshold'])
         for k, v in precision_scores.items():
