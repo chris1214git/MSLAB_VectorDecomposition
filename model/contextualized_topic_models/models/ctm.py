@@ -18,7 +18,7 @@ from contextualized_topic_models.utils.early_stopping.early_stopping import Earl
 from contextualized_topic_models.networks.decoding_network import DecoderNetwork
 ### casimir
 from contextualized_topic_models.evaluation.measures import CoherenceNPMI, TopicDiversity, InvertedRBO
-from utils.eval import retrieval_normalized_dcg_all, retrieval_precision_all_v2, semantic_precision_all
+from utils.eval import retrieval_normalized_dcg_all, retrieval_precision_all_v2, semantic_precision_all_v2
 from utils.toolbox import get_free_gpu, record_settings
 ###
 
@@ -445,7 +445,7 @@ class CTM:
                               posterior_mean, posterior_variance, posterior_log_variance, recon_dists)
             
             # Semantic Prcision for reconstruct
-            precision_scores, word_result = semantic_precision_all(recon_dists, X_bow, self.word_embeddings, self.vocab, k=self.config['topk'], th = self.config['threshold'])
+            precision_scores, word_result = semantic_precision_all_v2(recon_dists, X_bow, self.word_embeddings, self.vocab, k=self.config['topk'], th = self.config['threshold'])
             for k, v in precision_scores.items():
                 results['[Recon] Semantic Precision@{}'.format(k)].append(v)
                 
@@ -460,7 +460,7 @@ class CTM:
                 results['[Recon] ndcg@{}'.format(k)].append(v)
 
             # Semantic Prcision for word dist
-            precision_scores, word_result = semantic_precision_all(word_dists, X_bow, self.word_embeddings, self.vocab, k=self.config['topk'], th = self.config['threshold'])
+            precision_scores, word_result = semantic_precision_all_v2(word_dists, X_bow, self.word_embeddings, self.vocab, k=self.config['topk'], th = self.config['threshold'])
             for k, v in precision_scores.items():
                 dists['[Word Dist] Semantic Precision@{}'.format(k)].append(v)
                 
