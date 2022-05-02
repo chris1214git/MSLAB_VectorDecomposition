@@ -5,7 +5,7 @@ import numpy as np
 import nltk
 import argparse
 from collections import defaultdict
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import Dataset, DataLoader, random_split
 
 sys.path.append("../")
 from utils.toolbox import same_seeds, show_settings, record_settings, get_preprocess_document, get_preprocess_document_embs, get_preprocess_document_labels, get_word_embs
@@ -14,38 +14,18 @@ from utils.eval import retrieval_normalized_dcg_all, retrieval_precision_all, se
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 torch.set_num_threads(8)
 
-def evaluate_Decoder(config, labels, predict, vocabulary, word_embeddings):
-    results = defaultdict(list)
+class SimpleDataset(Dataset):
+    def __init__(self, predict, target):
         
-    # predict all data
-    pred = torch.from_numpy(predict)
-    y = torch.from_numpy(labels)
-    
-    # Semantic Prcision
-    precision_scores, word_result = semantic_precision_all(pred, y, word_embeddings, vocabulary, k=config['topk'], th=config['threshold'])
-    for k, v in precision_scores.items():
-        results['Semantic Precision v1@{}'.format(k)].append(v)
-    precision_scores, word_result = semantic_precision_all_v2(pred, y, word_embeddings, vocabulary, k=config['topk'], th=config['threshold'])
-    for k, v in precision_scores.items():
-        results['Semantic Precision v2@{}'.format(k)].append(v)
-
-    # Precision
-    precision_scores = retrieval_precision_all(pred, y, k=config["topk"])
-    for k, v in precision_scores.items():
-        results['precision v1@{}'.format(k)].append(v)
-    precision_scores = retrieval_precision_all_v2(pred, y, k=config["topk"])
-    for k, v in precision_scores.items():
-        results['precision v2@{}'.format(k)].append(v)
-    
-    # NDCG
-    ndcg_scores = retrieval_normalized_dcg_all(pred, y, k=config["topk"])
-    for k, v in ndcg_scores.items():
-        results['ndcg@{}'.format(k)].append(v)
+        assert len(predict) == len(target)
+        self.predict = torch.FloatTensor(predict)
+        self.target = torch.FloatTensor(target)        
         
-    for k in results:
-        results[k] = np.mean(results[k])
+    def __getitem__(self, idx):
+        return self.predict[idx], self.target[idx]
 
-    return results
+    def __len__(self):
+        return len(self.predict)
 
 if __name__ =='__main__':
     parser = argparse.ArgumentParser(description='document decomposition.')
@@ -102,10 +82,43 @@ if __name__ =='__main__':
     # predic
     predict = labels[config['target']].mean(axis=0)
     predict = np.tile(predict, (labels[config['target']].shape[0], 1))
+    
+    # prepare dataset
+    dataset = SimpleDataset(predict, labels[config['target']])
+    dataloader = DataLoader(dataset, batch_size=64, shuffle=True, pin_memory=True,)
 
-    res = evaluate_Decoder(config, labels[config['target']], predict, vocabularys[config['target']], word_embeddings)
+    # calculate score
+    device = get_free_gpu()
+    results = defaultdict(list)
+    for batch, (pred, label) in enumerate(dataloader):
+        pred, label = pred.to(device), label.to(device)
+        res = evaluate_Decoder(config, label, pred, vocabularys[config['target']], word_embeddings)
+        # Semantic Prcision for reconstruct
+        precision_scores, word_result = semantic_precision_all(pred, label, word_embeddings, vocabularys[config['target']], k=config['topk'], th = config['threshold'])
+        for k, v in precision_scores.items():
+            results['[Recon] Semantic Precision v1@{}'.format(k)].append(v)
+        precision_scores, word_result = semantic_precision_all_v2(pred, label, word_embeddings, vocabularys[config['target']], k=config['topk'], th = config['threshold'])
+        for k, v in precision_scores.items():
+            results['[Recon] Semantic Precision v2@{}'.format(k)].append(v)
+                        
+        # Precision for reconstruct
+        precision_scores = retrieval_precision_all(pred, label, k=config['topk'])
+        for k, v in precision_scores.items():
+            results['[Recon] Precision v1@{}'.format(k)].append(v)
+        precision_scores = retrieval_precision_all_v2(pred, label, k=config['topk'])
+        for k, v in precision_scores.items():
+            results['[Recon] Precision v2@{}'.format(k)].append(v)
+
+        # NDCG for reconstruct
+        ndcg_scores = retrieval_normalized_dcg_all(pred, label, k=config['topk'])
+        for k, v in ndcg_scores.items():
+            results['[Recon] ndcg@{}'.format(k)].append(v)
+    
+    for k in results:
+        results[k] = np.mean(results[k])
+
+    # save result
     record = open('./'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['target']+'.txt', 'a')
-
-    for key,val in res.items():
+    for key,val in results.items():
         print(f"{key}:{val:.4f}")
         record.write(f"{key}:{val:.4f}\n")
