@@ -117,7 +117,7 @@ if __name__ =='__main__':
         results[k] = np.mean(results[k])
 
     # save result
-    record = open('./'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['target']+'.txt', 'a')
+    record = open('./'+config['dataset']+'_'+config['model']+'_'+config['target']+'.txt', 'a')
     for key,val in results.items():
         print(f"{key}:{val:.4f}")
         record.write(f"{key}:{val:.4f}\n")
