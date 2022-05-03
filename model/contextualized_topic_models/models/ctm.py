@@ -352,7 +352,7 @@ class CTM:
                 val_res, dist_res = self._predict(validation_loader)
                 npmi = CoherenceNPMI(texts=self.texts, topics=self.get_topic_lists(10))
                 diversity = InvertedRBO(topics=self.get_topic_lists(10))
-                record = open('./'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['activation']+'_'+self.config['encoder']+'_'+self.config['target']+'_lr'+str(self.config['lr'])+'_batch'+str(self.config['batch_size'])+'_weightdecay'+str(self.config['weight_decay'])+'.txt', 'a')
+                record = open('./'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['architecture']+'_'+self.config['activation']+'_'+self.config['encoder']+'_'+self.config['target']+'_lr'+str(self.config['lr'])+'_batch'+str(self.config['batch_size'])+'_weightdecay'+str(self.config['weight_decay'])+'.txt', 'a')
                 print('---------------------------------------')
                 record.write('-------------------------------------------------\n')
                 print('EPOCH', epoch + 1)

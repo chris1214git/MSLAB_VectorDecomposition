@@ -4,23 +4,34 @@ from itertools import product
 
 parser = argparse.ArgumentParser(description='document decomposition.')
 parser.add_argument('--dataset', type=str, default="20news")
-parser.add_argument('--encoder', type=str, default="all")
+parser.add_argument('--experiment', type=str, default='search')
 args = parser.parse_args()
 config = vars(args)
 
-activation_list = ['sigmoid', 'tanh']
-if config['encoder'] == 'all':
-    encoder_list = ['mpnet', 'bert', 'average', 'doc2vec']
-elif config['encoder'] == 'transformer':
-    encoder_list = ['mpnet', 'bert']
-else:
-    encoder_list = ['average', 'doc2vec']
-lr_list = [2e-3, 5e-2, 1e-2, 5e-3, 1e-3, 5e-4, 1e-4] # 2e-3 is ZTM original lr
-weight_decay_list = [0, 1e-1, 1e-2, 1e-3]
-batch_size_list = [8, 16, 32]
+if config['experiment'] == 'search':
+    print('--- search parameters ---')
+    batch_size_list = [8, 16, 32]
+    architecture_list = ['before', 'after']
+    activation_list = ['sigmoid', 'tanh']  
+    lr_list = [2e-3, 1e-2, 1e-3, 1e-4] # 2e-3 is ZTM default lr
+    weight_decay_list = [1e-1, 1e-2, 1e-3]
+    
 
-comb = list(product(activation_list, encoder_list, lr_list, weight_decay_list, batch_size_list))
-for parameters in comb:
-    activation, encoder, lr, weight_decay, batch_size = parameters
-    cmd = f"python3 ztm_decoder.py --dataset {config['dataset']} --activation {activation} --encoder {encoder} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size}"
-    os.system(cmd)
+    comb = list(product(batch_size_list, architecture_list, activation_list, lr_list, weight_decay_list))
+    for parameters in comb:
+        batch_size, architecture, activation, lr, weight_decay = parameters
+        cmd = f"python3 ztm_decoder.py --dataset {config['dataset']} --architecture {architecture} --activation {activation} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size}"
+        os.system(cmd)
+else:
+    print('--- experiment ---')
+    activation_list = ['sigmoid', 'tanh']
+    architecture_list = ['after', 'before']
+    batch_size = 8
+    lr = 2e-3
+    weight_decay = 1e-1
+
+    comb = list(product(activation_list, architecture_list))
+    for parameters in comb:
+        activation, architecture = parameters
+        cmd = f"python3 ztm_decoder.py --dataset {config['dataset']} --architecture {architecture} --activation {activation} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size}"
+        os.system(cmd)

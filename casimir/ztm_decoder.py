@@ -22,6 +22,7 @@ torch.set_num_threads(15)
 if __name__ =='__main__':
     parser = argparse.ArgumentParser(description='document decomposition.')
     parser.add_argument('--model', type=str, default="ZTM")
+    parser.add_argument('--architecture', type=str, default="before")
     parser.add_argument('--activation', type=str, default="sigmoid")
     parser.add_argument('--dataset', type=str, default="20news")
     parser.add_argument('--use_pos', type=bool, default=True)
@@ -29,7 +30,7 @@ if __name__ =='__main__':
     parser.add_argument('--max_df', type=float, default=1.0)
     parser.add_argument('--vocab_size', type=int, default=0)
     parser.add_argument('--min_doc_word', type=int, default=15)
-    parser.add_argument('--encoder', type=str, default='bert')
+    parser.add_argument('--encoder', type=str, default='mpnet')
     parser.add_argument('--target', type=str, default='tf-idf')
     parser.add_argument('--topic_num', type=int, default=50)
     parser.add_argument('--seed', type=int, default=123)
@@ -113,6 +114,13 @@ if __name__ =='__main__':
         except:
             print('[Error] CUDA Memory Insufficient, retry after 15 secondes.')
             time.sleep(15)
+    # if config['model'] == 'CombinedTM':
+    #     model = CombinedTM(bow_size=len(tp.vocab), contextual_size=contextual_size, n_components=config['topic_num'], num_epochs=config['epochs'], config=config, texts=texts, vocab = tp.vocab, word_embeddings=word_embeddings, idx2token=dataset.idx2token, device=device)
+    # elif config['model'] == 'mlp':
+    #     model = MLPDecoder(bow_size=len(tp.vocab), contextual_size=contextual_size, num_epochs=config['epochs'], config=config, texts=texts,vocab = tp.vocab, word_embeddings=word_embeddings, idx2token=dataset.idx2token)
+    # else:
+    #     model = ZeroShotTM(bow_size=len(tp.vocab), contextual_size=contextual_size, n_components=config['topic_num'], num_epochs=config['epochs'], config=config, texts=texts, vocab = tp.vocab, word_embeddings=word_embeddings, idx2token=dataset.idx2token, device=device)
+    # model.fit(training_set, validation_set)
 
     # Pre-Define Document to check
     # Notice: only for vocabulary size = 8000

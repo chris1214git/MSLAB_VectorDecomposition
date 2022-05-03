@@ -51,8 +51,10 @@ class DecoderNetwork(nn.Module):
         self.batch_norm = nn.BatchNorm1d(vocab_size)
         
         ## random initialize word embedding
-        self.word_embedding = nn.Parameter(torch.randn(vocab_size*4, vocab_size))
-
+        if config['architecture'] == 'after':
+            self.word_embedding = nn.Parameter(torch.randn(vocab_size*4+bert_size, vocab_size))
+        else:
+            self.word_embedding = nn.Parameter(torch.randn(vocab_size*4, vocab_size))
         ## glove word embedding
         # self.word_embedding = nn.Parameter(word_embedding)
 
@@ -66,18 +68,32 @@ class DecoderNetwork(nn.Module):
             nn.Sigmoid(),
         )
         ## doc embedding info version
-        if config['activation'] == 'tanh':
-            self.half_decoder = nn.Sequential(
-                nn.Linear(vocab_size+bert_size, vocab_size*4),
-                nn.BatchNorm1d(vocab_size*4),
-                nn.Tanh(),
-            )
+        if config['architecture'] == 'after':
+            if config['activation'] == 'tanh':
+                self.half_decoder = nn.Sequential(
+                    nn.Linear(vocab_size, vocab_size*4),
+                    nn.BatchNorm1d(vocab_size*4),
+                    nn.Tanh(),
+                )
+            else:
+                self.half_decoder = nn.Sequential(
+                    nn.Linear(vocab_size, vocab_size*4),
+                    nn.BatchNorm1d(vocab_size*4),
+                    nn.Sigmoid(),
+                )
         else:
-            self.half_decoder = nn.Sequential(
-                nn.Linear(vocab_size+bert_size, vocab_size*4),
-                nn.BatchNorm1d(vocab_size*4),
-                nn.Sigmoid(),
-            )
+            if config['activation'] == 'tanh':
+                self.half_decoder = nn.Sequential(
+                    nn.Linear(vocab_size+bert_size, vocab_size*4),
+                    nn.BatchNorm1d(vocab_size*4),
+                    nn.Tanh(),
+                )
+            else:
+                self.half_decoder = nn.Sequential(
+                    nn.Linear(vocab_size+bert_size, vocab_size*4),
+                    nn.BatchNorm1d(vocab_size*4),
+                    nn.Sigmoid(),
+                )
         ## real share weight
         self.real_share_wieght_decoder = nn.Sequential(
             nn.Linear(bert_size, bert_size*4),
@@ -196,9 +212,14 @@ class DecoderNetwork(nn.Module):
         # emb_word_dist = torch.cat((decoded_word_dist, x_bert), dim=1)
         # recon_dist = torch.sigmoid(self.batch_norm((torch.matmul(emb_word_dist, self.word_embedding))))
         
-        emb_word_dist = torch.cat((word_dist, x_bert), dim=1)
-        decoded_word_dist = self.half_decoder(emb_word_dist)
-        recon_dist = torch.sigmoid(self.batch_norm((torch.matmul(decoded_word_dist, self.word_embedding))))
+        if self.config['architecture'] == 'after':
+            decoded_word_dist = self.half_decoder(word_dist)
+            emb_word_dist = torch.cat((decoded_word_dist, x_bert), dim=1)
+            recon_dist = torch.sigmoid(self.batch_norm((torch.matmul(emb_word_dist, self.word_embedding))))
+        else:
+            emb_word_dist = torch.cat((word_dist, x_bert), dim=1)
+            decoded_word_dist = self.half_decoder(emb_word_dist)
+            recon_dist = torch.sigmoid(self.batch_norm((torch.matmul(decoded_word_dist, self.word_embedding))))
 
         ## share weight + doc embedding info version + glove word embedding
         # emb_word_dist = torch.cat((word_dist, x_bert), dim=1)
