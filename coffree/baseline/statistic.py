@@ -36,7 +36,7 @@ if __name__ == '__main__':
     same_seeds(config["seed"])
     
     # data preprocessing
-    unpreprocessed_corpus ,preprocessed_corpus = get_preprocess_document(**config)
+    unpreprocessed_corpus, preprocessed_corpus = get_preprocess_document(**config)
     texts = [text.split() for text in preprocessed_corpus]
     length = [len(text) for text in texts]
     print(texts[:3])
