@@ -22,6 +22,20 @@ if config['experiment'] == 'search':
         batch_size, architecture, activation, lr, weight_decay = parameters
         cmd = f"python3 ztm_decoder.py --dataset {config['dataset']} --architecture {architecture} --activation {activation} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size}"
         os.system(cmd)
+elif config['experiment'] == 'dataset':
+    print('--- run all dataset ---')
+    dataset_list = ['20news', 'agnews', 'IMDB']
+    architecture_list = ['before', 'after']
+    activation = 'sigmoid'
+    batch_size = 16
+    lr = 2e-3
+    weight_decay = 1e-1
+
+    comb = list(product(architecture_list, dataset_list))
+    for parameters in comb:
+        architecture, dataset = parameters
+        cmd = f"python3 ztm_decoder.py --dataset {dataset} --architecture {architecture} --activation {activation} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size}"
+        os.system(cmd)
 else:
     print('--- experiment ---')
     activation_list = ['sigmoid', 'tanh']
