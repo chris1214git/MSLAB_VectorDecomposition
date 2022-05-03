@@ -9,7 +9,25 @@ import torch.optim as optim
 import torch.nn as nn
 
 from model import Decoder, Seq2Seq
-from utils.toolbox import same_seeds, show_settings, get_preprocess_document, get_preprocess_document_embs, get_free_gpu
+from torch.utils.data import DataLoader, Dataset
+from utils.toolbox import same_seeds, show_settings, get_preprocess_document, \
+                            get_preprocess_document_embs, get_free_gpu
+
+class LSTMDecoderDataset(Dataset):
+    def __init__(self, doc_embs, targets):
+        
+        assert len(doc_embs) == len(targets)
+
+        self.doc_embs = torch.FloatTensor(doc_embs)
+        self.targets = torch.FloatTensor(targets)        
+        self.targets_rank = torch.argsort(self.targets, dim=1, descending=True)
+        self.topk = torch.sum(self.targets > 0, dim=1)
+        
+    def __getitem__(self, idx):
+        return self.doc_embs[idx], self.targets[idx], self.targets_rank[idx], self.topk[idx]
+
+    def __len__(self):
+        return len(self.doc_embs)
 
 def pad_sequence(sentence, word2idx, sen_len):
     # 將每個句子變成一樣的長度
@@ -21,6 +39,34 @@ def pad_sequence(sentence, word2idx, sen_len):
             sentence.append(word2idx["<PAD>"])
     assert len(sentence) == sen_len
     return sentence
+
+def prepare_dataloader(doc_embs, targets, batch_size=100, train_valid_test_ratio=[0.7, 0.1, 0.2]):
+    train_size = int(len(doc_embs) * train_valid_test_ratio[0])
+    valid_size = int(len(doc_embs) * (train_valid_test_ratio[0] + train_valid_test_ratio[1])) - train_size
+    test_size = len(doc_embs) - train_size - valid_size
+    
+    print('Preparing dataloader')
+    print('train size', train_size)
+    print('valid size', valid_size)
+    print('test size', test_size)
+
+    # shuffle
+    randomize = np.arange(len(doc_embs))
+    np.random.shuffle(randomize)
+    doc_embs = doc_embs[randomize]
+    targets = targets[randomize]
+    
+    # dataloader
+    train_dataset = LSTMDecoderDataset(doc_embs[:train_size], targets[:train_size])
+    train_loader  = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
+
+    valid_dataset = LSTMDecoderDataset(doc_embs[train_size:train_size+valid_size], targets[train_size:train_size+valid_size])
+    valid_loader  = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, pin_memory=True)
+
+    test_dataset = LSTMDecoderDataset(doc_embs[train_size+valid_size:], targets[train_size+valid_size:])
+    test_loader  = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, pin_memory=True)
+    
+    return train_loader, valid_loader, test_loader
 
 def get_preprocess_document_labels(texts, max_len=50):
     word2idx = {"<SOS>": 0, "<EOS>": 1, "<PAD>": 2, "<UNK>" : 3}
@@ -59,11 +105,8 @@ def train(model, iterator, optimizer, criterion, clip):
 
     for i, batch in enumerate(iterator):
 
-        doc_emb = batch.doc_emb
-        trg = batch.trg
-
-        optimizer.zero_grad()
-
+        doc_emb, trg, _, _ = batch
+        trg = torch.transpose(trg, 0, 1)
         # doc_emb = [batch_size, emb_dim]
         # trg = [trg len, batch size]
         # output = [trg len, batch size, output dim]
@@ -78,11 +121,9 @@ def train(model, iterator, optimizer, criterion, clip):
         # output = [(trg len - 1) * batch size, output dim]
 
         loss = criterion(output, trg)
-
+        optimizer.zero_grad()
         loss.backward()
-
         torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
-
         optimizer.step()
 
         epoch_loss += loss.item()
@@ -128,6 +169,7 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, default="20news")
     parser.add_argument('--min_df', type=int, default=1)
     parser.add_argument('--max_df', type=float, default=1.0)
+    parser.add_argument('--max_len', type=float, default=50)
     parser.add_argument('--min_doc_word', type=int, default=15)
     parser.add_argument('--min_doc_len', type=int, default=15)
     parser.add_argument('--encoder', type=str, default='bert')
@@ -145,7 +187,7 @@ if __name__ == '__main__':
     # generating document embedding
     doc_embs, doc_model = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
 
-    word2idx, idx2word, labels = get_preprocess_document_labels(texts)
+    word2idx, idx2word, labels = get_preprocess_document_labels(texts, max_len=config["max_len"])
 
     device = get_free_gpu()
 
@@ -159,6 +201,8 @@ if __name__ == '__main__':
     print("voc size: {}".format(vocabulary_size))
     print("labels size: {}".format(labels.size()))
 
+    train_loader, valid_loader, test_loader = prepare_dataloader(doc_embs, labels, batch_size=32)
+
     # We only need decoder part
     # dec = Decoder(vocabulary_size, embedding_size, hidden_size, num_layer, drop_out)
     # model = Seq2Seq(dec, device).to(device)
@@ -170,5 +214,5 @@ if __name__ == '__main__':
     # CLIP = 1
 
     # for epoch in range(N_EPOCHS):
-    #     train_loss = train(model, train_iterator, optimizer, criterion, CLIP)
-    #     valid_loss = evaluate(model, valid_iterator, criterion)
+    #     train_loss = train(model, train_loader, optimizer, criterion, CLIP)
+    #     valid_loss = evaluate(model, valid_loader, criterion)
