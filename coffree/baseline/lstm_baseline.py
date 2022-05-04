@@ -19,12 +19,12 @@ class LSTMDecoderDataset(Dataset):
         assert len(doc_embs) == len(targets)
 
         self.doc_embs = torch.FloatTensor(doc_embs)
-        self.targets = torch.FloatTensor(targets)        
-        self.targets_rank = torch.argsort(self.targets, dim=1, descending=True)
-        self.topk = torch.sum(self.targets > 0, dim=1)
+        self.targets = torch.LongTensor(targets)        
+        # self.targets_rank = torch.argsort(self.targets, dim=1, descending=True)
+        # self.topk = torch.sum(self.targets > 0, dim=1)
         
     def __getitem__(self, idx):
-        return self.doc_embs[idx], self.targets[idx], self.targets_rank[idx], self.topk[idx]
+        return self.doc_embs[idx], self.targets[idx]
 
     def __len__(self):
         return len(self.doc_embs)
@@ -105,7 +105,7 @@ def train(model, iterator, optimizer, criterion, clip):
 
     for i, batch in enumerate(iterator):
 
-        doc_emb, trg, _, _ = batch
+        doc_emb, trg = batch
         trg = torch.transpose(trg, 0, 1)
         # doc_emb = [batch_size, emb_dim]
         # trg = [trg len, batch size]
@@ -169,7 +169,8 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, default="20news")
     parser.add_argument('--min_df', type=int, default=1)
     parser.add_argument('--max_df', type=float, default=1.0)
-    parser.add_argument('--max_len', type=float, default=50)
+    parser.add_argument('--max_len', type=int, default=50)
+    parser.add_argument('--num_epoch', type=int, default=50)
     parser.add_argument('--min_doc_word', type=int, default=15)
     parser.add_argument('--min_doc_len', type=int, default=15)
     parser.add_argument('--encoder', type=str, default='bert')
@@ -185,11 +186,10 @@ if __name__ == '__main__':
     texts = [text.split() for text in preprocessed_corpus]
 
     # generating document embedding
-    doc_embs, doc_model = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
+    doc_embs, doc_model, device = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
+    print("Get doc embedding done.")
 
     word2idx, idx2word, labels = get_preprocess_document_labels(texts, max_len=config["max_len"])
-
-    device = get_free_gpu()
 
     vocabulary_size = len(word2idx)
     embedding_size = 512
@@ -204,15 +204,14 @@ if __name__ == '__main__':
     train_loader, valid_loader, test_loader = prepare_dataloader(doc_embs, labels, batch_size=32)
 
     # We only need decoder part
-    # dec = Decoder(vocabulary_size, embedding_size, hidden_size, num_layer, drop_out)
-    # model = Seq2Seq(dec, device).to(device)
+    dec = Decoder(vocabulary_size, embedding_size, hidden_size, num_layer, drop_out)
+    model = Seq2Seq(dec, device).to(device)
 
-    # optimizer = optim.Adam(model.parameters())
-    # criterion = nn.CrossEntropyLoss(ignore_index=word2idx["<PAD>"])
+    optimizer = optim.Adam(model.parameters())
+    criterion = nn.CrossEntropyLoss(ignore_index=word2idx["<PAD>"])
 
-    # N_EPOCHS = 10
-    # CLIP = 1
+    CLIP = 1
 
-    # for epoch in range(N_EPOCHS):
+    # for epoch in range(config["num_epoch"]):
     #     train_loss = train(model, train_loader, optimizer, criterion, CLIP)
     #     valid_loss = evaluate(model, valid_loader, criterion)

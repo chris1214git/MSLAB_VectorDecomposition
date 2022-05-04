@@ -100,10 +100,50 @@ class Seq2Seq(nn.Module):
             teacher_force = random.random() < teacher_forcing_ratio
             
             #get the highest predicted token from our predictions
-            top1 = output.argmax(1) 
+            top1 = output.argmax(1)
             
             #if teacher forcing, use actual next token as next input
             #if not, use predicted token
             input = trg[t] if teacher_force else top1
         
         return outputs
+
+    def predict(self, doc_emb, word2idx, idx2word, max_len=50):
+        #trg = [trg len, batch size]
+        #teacher_forcing_ratio is probability to use teacher forcing
+        #doc_emb = [batch size, embedding_dim]
+        trg_len = max_len
+        trg_vocab_size = self.decoder.output_dim
+        
+        #tensor to store decoder outputs
+        outputs = torch.zeros(trg_len, batch_size, trg_vocab_size).to(self.device)
+        prediction = torch.zeros(trg_len, batch_size)
+        
+        #last hidden state of the encoder is used as the initial hidden state of the decoder
+        # hidden = [n layers, batch size, hid dim]
+        # cell = [n layers, batch size, hid dim]
+        hidden = torch.unsqueeze(doc_emb, 0)
+        cell = torch.unsqueeze(doc_emb, 0)
+        
+        #first input to the decoder is the <sos> tokens
+        input = torch.LongTensor([word2idx["SOS"]] * len(doc_emb)).unsqueeze(0)
+        
+        for t in range(1, trg_len):
+            
+            #insert input token embedding, previous hidden and previous cell states
+            #receive output tensor (predictions) and new hidden and cell states
+            output, hidden, cell = self.decoder(input, hidden, cell)
+            
+            #place predictions in a tensor holding predictions for each token
+            outputs[t] = output
+            
+            #get the highest predicted token from our predictions
+            input = output.argmax(1)
+
+
+            if (input == word2idx["EOS"]):
+                break
+
+            prediction[t] = input.item()
+
+        return prediction
