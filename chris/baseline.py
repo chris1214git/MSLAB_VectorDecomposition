@@ -28,7 +28,7 @@ from tqdm.auto import tqdm
 import matplotlib.pyplot as plt
 
 sys.path.append('../')
-from utils.eval import retrieval_normalized_dcg_all, retrieval_precision_all, semantic_precision_all, semantic_precision_all_v2, precision_recall_f1_all
+from utils.eval import retrieval_normalized_dcg_all, retrieval_precision_all, retrieval_precision_all_v2, semantic_precision_all, semantic_precision_all_v2, precision_recall_f1_all
 from utils.loss import *
 from utils.data_loader import load_document
 from utils.toolbox import preprocess_document, get_preprocess_document, get_preprocess_document_embs,                          get_preprocess_document_labels, get_preprocess_document_labels_v2, get_word_embs,                          get_free_gpu, merge_targets
@@ -153,7 +153,7 @@ unpreprocessed_docs, preprocessed_docs, doc_embs, targets, vocabularys, device =
 
 
 if config['dataset2'] is not None:
-    unpreprocessed_docs2, preprocessed_docs2, doc_embs2, targets2, vocabularys2 = load_training_data(config, config['dataset2'])
+    unpreprocessed_docs2, preprocessed_docs2, doc_embs2, targets2, vocabularys2, device = load_training_data(config, config['dataset2'])
     targets, targets2, vocabularys = merge_targets(targets, targets2, vocabularys, vocabularys2)
     
 
@@ -305,53 +305,20 @@ def evaluate_DNNDecoder(model, data_loader, config, pred_semantic=False):
             
             # Semantic Precision
             if pred_semantic:
-                semantic_precision_scores, word_result = semantic_precision_all_v2(pred, target, word_embs_tensor, vocabularys,                                                                                k=config["valid_topk"], th=0.7, display_word_result=False)
+                semantic_precision_scores, word_result = semantic_precision_all(pred, target, word_embs_tensor, vocabularys,\
+                                                                                k=config["valid_topk"], th=0.5, display_word_result=False)
                 for k, v in semantic_precision_scores.items():
                     results['semantic_precision@{}'.format(k)].append(v)
+                    
+                semantic_precision_scores, word_result = semantic_precision_all_v2(pred, target, word_embs_tensor, vocabularys,\
+                                                                                k=config["valid_topk"], th=0.5, display_word_result=False)
+                for k, v in semantic_precision_scores.items():
+                    results['semantic_precision_v2@{}'.format(k)].append(v)
 
     for k in results:
         results[k] = np.mean(results[k])
 
     return results
-
-
-# In[14]:
-
-
-def retrieval_precision_all_v2(preds, target, k = [10]):
-    """Computes `TopK precision`_ (for information retrieval).
-    # ref: https://discuss.pytorch.org/t/how-to-use-torch-topk-to-set-non-topk-values-of-a-tensor-to-zero/3985
-    Different from v1:
-        select topk ground truth only
-    Args:
-    (1) preds: tensor with 2d shape
-    (2) target: tensor with 2d shape
-    (3) k: a list of integer
-    Return:
-    (1) precision_scores: dict
-        key -> k, value -> average precision score
-    """
-    assert preds.shape == target.shape and max(k) <= preds.shape[-1]
-    
-    if not isinstance(k, list):
-        raise ValueError("`k` has to be a list of positive integer")
-        
-    precision_scores = {}
-    device = preds.device
-    
-    for topk in k:
-        # topk has value
-        topk_values, indices = torch.topk(target, topk)
-        target_topk = torch.zeros(target.shape).to(device).scatter_(1, indices, topk_values)
-        target_onehot_topk = target_topk > 0
-
-        relevant = target_onehot_topk.gather(1, preds.topk(topk, dim=-1)[1])
-        relevant = relevant.sum(axis=1).float()
-        relevant /= topk    
-        precision_scores[topk] = relevant.mean().item()
-    
-    return precision_scores
-
 
 # In[15]:
 

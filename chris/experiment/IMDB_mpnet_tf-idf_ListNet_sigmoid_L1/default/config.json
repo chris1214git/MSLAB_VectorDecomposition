@@ -1,0 +1,1 @@
+{"experiment_dir": "IMDB_mpnet_tf-idf_ListNet_sigmoid_L1", "preprocess_config_dir": "parameters_baseline", "save_dir": "default", "dataset": "IMDB", "dataset2": null, "model_name": "mpnet", "label_type": "tf-idf", "eval_f1": false, "n_gram": 1, "criterion": "ListNet_sigmoid_L1", "n_time": 1, "seed": 123}

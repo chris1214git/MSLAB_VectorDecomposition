@@ -1,0 +1,1 @@
+{"n_time": 1, "lr": 0.001, "weight_decay": 0.0, "loss_topk": 15, "n_epoch": 1000, "valid_epoch": 10, "valid_verbose": true, "valid_topk": [5, 10, 15], "h_dim": 300, "label_type": "tf-idf", "eval_f1": false, "criterion": "ListNet_sigmoid_L1"}
