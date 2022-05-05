@@ -109,7 +109,7 @@ def retrieval_precision_all_v2(preds, target, k = [10]):
     
     return precision_scores
 
-def semantic_precision_all(preds, target, word_embeddings, tp_vocab, k = [10], th = 0.7, display_word_result=False):
+def semantic_precision_all(preds, target, word_embeddings, tp_vocab, k = [10], th = 0.5, display_word_result=False):
     """Computes `TopK precision`_ (for information retrieval).
     Note:
         select topk pred
@@ -165,7 +165,7 @@ def semantic_precision_all(preds, target, word_embeddings, tp_vocab, k = [10], t
     
     return precision_scores, word_result
 
-def semantic_precision_all_v2(preds, target, word_embeddings, tp_vocab, k = [10], th = 0.7, display_word_result=False):
+def semantic_precision_all_v2(preds, target, word_embeddings, tp_vocab, k = [10], th = 0.5, display_word_result=False):
     """Computes `TopK precision`_ (for information retrieval).
     Different:
         select topk ground truth
