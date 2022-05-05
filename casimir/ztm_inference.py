@@ -14,7 +14,7 @@ if config['experiment'] == 'search':
     architecture_list = ['before', 'after']
     activation_list = ['sigmoid', 'tanh']  
     lr_list = [2e-3, 1e-2, 1e-3, 1e-4] # 2e-3 is ZTM default lr
-    weight_decay_list = [1e-1, 1e-2, 1e-3]
+    weight_decay_list = [1e-1, 1e-2, 1e-3, 0]
     
 
     comb = list(product(batch_size_list, architecture_list, activation_list, lr_list, weight_decay_list))
@@ -29,7 +29,7 @@ elif config['experiment'] == 'dataset':
     activation = 'sigmoid'
     batch_size = 16
     lr = 2e-3
-    weight_decay = 1e-1
+    weight_decay = 0
 
     comb = list(product(architecture_list, dataset_list))
     for parameters in comb:
@@ -42,7 +42,7 @@ else:
     architecture_list = ['after', 'before']
     batch_size = 8
     lr = 2e-3
-    weight_decay = 1e-1
+    weight_decay = 0
 
     comb = list(product(activation_list, architecture_list))
     for parameters in comb:

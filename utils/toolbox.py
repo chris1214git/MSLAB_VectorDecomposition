@@ -404,24 +404,19 @@ def get_word_embs(vocabularys, id2token=None, word_emb_file='../data/glove.6B.30
     '''
     
     word2emb = load_word2emb(word_emb_file)
+    dim = len(list(word2emb.values())[0])
+    word_embs = []
+    for word in vocabularys:
+        if word not in word2emb:
+            emb = np.zeros(dim)
+        else:
+            emb = word2emb[word]
+        word_embs.append(emb) 
+
     if data_type == 'tensor':
         print('Getting [tensor] word embeddings')
-        word_embs = torch.zeros(len(id2token), len(word2emb['a']))
-        for k in id2token:
-            if id2token[k] not in word2emb:
-                continue
-            word_embs[k] = torch.tensor(word2emb[id2token[k]])
+        word_embs = torch.Tensor(word_embs)
     else:
         print('Getting [ndarray] word embeddings')
-        dim = len(list(word2emb.values())[0])
-        word_embs = []
-        for word in vocabularys:
-            if word not in word2emb:
-                emb = np.zeros(dim)
-            else:
-                emb = word2emb[word]
-            word_embs.append(emb) 
-
         word_embs = np.array(word_embs)
-
     return word_embs
