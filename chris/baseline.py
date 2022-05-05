@@ -68,7 +68,7 @@ parser.add_argument('--criterion', type=str, default='BCE')
 parser.add_argument('--n_gram', type=int, default=1)
 parser.add_argument('--n_time', type=int, default=5)
 parser.add_argument('--save_dir', type=str, default='default')
-parser.add_argument('--preprocess_config_dir', type=str, default='parameters_baseline')
+parser.add_argument('--preprocess_config_dir', type=str, default='parameters_baseline2')
 parser.add_argument('--seed', type=int, default=123)
 
 args = parser.parse_args()
@@ -325,7 +325,9 @@ def evaluate_DNNDecoder(model, data_loader, config, pred_semantic=False):
 
 def calculate_loss(train_train_config, criterion, pred, target, target_rank, target_topk):
     if train_config["criterion"] == "MultiLabelMarginLoss":
-        target_rank[:, train_config["loss_topk"]] = -1
+        assert target_rank.shape[0] == len(target_topk)
+        for i in range(len(target_topk)):
+            target_rank[i, target_topk[i]] = -1
         loss = criterion(pred, target_rank)
     elif train_config["criterion"].startswith("MultiLabelMarginLossCustomV"):
         loss = criterion(pred, target_rank, target_topk)

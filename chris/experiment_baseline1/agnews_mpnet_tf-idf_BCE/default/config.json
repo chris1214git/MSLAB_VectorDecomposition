@@ -1,1 +1,0 @@
-{"experiment_dir": "agnews_mpnet_tf-idf_BCE", "preprocess_config_dir": "parameters_baseline", "save_dir": "default", "dataset": "agnews", "dataset2": null, "model_name": "mpnet", "label_type": "tf-idf", "eval_f1": false, "n_gram": 1, "criterion": "BCE", "n_time": 3, "seed": 123}
