@@ -374,13 +374,13 @@ def get_preprocess_document_embs(preprocessed_docs, model_name):
     device = get_free_gpu()
     if model_name == 'bert':
         model = SentenceTransformer("bert-base-uncased", device=device)
-        doc_embs = np.array(model.encode(preprocessed_docs, show_progress_bar=True, batch_size=200))
+        doc_embs = np.array(model.encode(preprocessed_docs, show_progress_bar=True, batch_size=50))
     elif model_name == 'mpnet':
         model = SentenceTransformer("all-mpnet-base-v2", device=device)
-        doc_embs = np.array(model.encode(preprocessed_docs, show_progress_bar=True, batch_size=200))
+        doc_embs = np.array(model.encode(preprocessed_docs, show_progress_bar=True, batch_size=50))
     elif model_name == 'average':
         model = SentenceTransformer("average_word_embeddings_glove.840B.300d", device=device)
-        doc_embs = np.array(model.encode(preprocessed_docs, show_progress_bar=True, batch_size=200))
+        doc_embs = np.array(model.encode(preprocessed_docs, show_progress_bar=True, batch_size=50))
     elif model_name == 'doc2vec':
         doc_embs = []
         preprocessed_docs_split = [doc.split() for doc in preprocessed_docs]
