@@ -11,30 +11,28 @@ config = vars(args)
 if config['experiment'] == 'search':
     print('--- search parameters ---')
     batch_size_list = [8, 16, 32]
-    architecture_list = ['before', 'after']
     activation_list = ['sigmoid', 'tanh']  
     lr_list = [2e-3, 1e-2, 1e-3, 1e-4] # 2e-3 is ZTM default lr
-    weight_decay_list = [1e-1, 1e-2, 1e-3, 0]
-    
+    weight_decay = 0
 
-    comb = list(product(batch_size_list, architecture_list, activation_list, lr_list, weight_decay_list))
+    comb = list(product(batch_size_list, activation_list, lr_list))
     for parameters in comb:
-        batch_size, architecture, activation, lr, weight_decay = parameters
-        cmd = f"python3 ztm_decoder.py --dataset {config['dataset']} --architecture {architecture} --activation {activation} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size}"
+        batch_size, activation, lr = parameters
+        cmd = f"python3 ztm_decoder.py --dataset {config['dataset']}  --activation {activation} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size}"
         os.system(cmd)
-elif config['experiment'] == 'dataset':
-    print('--- run all dataset ---')
-    dataset_list = ['20news', 'agnews', 'IMDB']
-    architecture_list = ['before', 'after']
+elif config['experiment'] == 'check':
+    print('--- run all dataset & encoder ---')
+    dataset_list = ['20news', 'agnews', 'IMDB', 'wiki']
+    encoder_list = ['mpnet', 'bert', 'doc2vec', 'average']
     activation = 'sigmoid'
     batch_size = 16
     lr = 2e-3
     weight_decay = 0
 
-    comb = list(product(architecture_list, dataset_list))
+    comb = list(product(dataset_list, encoder_list))
     for parameters in comb:
-        architecture, dataset = parameters
-        cmd = f"python3 ztm_decoder.py --dataset {dataset} --architecture {architecture} --activation {activation} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size}"
+        dataset, encoder = parameters
+        cmd = f"python3 ztm_decoder.py --dataset {dataset} --activation {activation} --encoder {encoder} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size}"
         os.system(cmd)
 else:
     print('--- experiment ---')

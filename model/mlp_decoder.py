@@ -63,7 +63,7 @@ class MLP:
         elif config['loss'] == 'mse':
             self.loss_funct = torch.nn.MSELoss(reduction='mean')
         else:
-            self.loss_funct = MythNet()
+            self.loss_funct = MythNet
 
     def fit(self, training_set, validation_set):
         training_loader = DataLoader(training_set, batch_size=self.batch_size, shuffle=True, pin_memory=True,)
