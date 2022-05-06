@@ -70,7 +70,6 @@ class Seq2Seq(nn.Module):
         #teacher_forcing_ratio is probability to use teacher forcing
         #doc_emb = [batch size, embedding_dim]
         #e.g. if teacher_forcing_ratio is 0.75 we use ground-truth inputs 75% of the time
-        
         batch_size = trg.shape[1]
         trg_len = trg.shape[0]
         trg_vocab_size = self.decoder.output_dim
@@ -108,16 +107,18 @@ class Seq2Seq(nn.Module):
         
         return outputs
 
-    def predict(self, doc_emb, word2idx, idx2word, max_len=50):
+    def predict(self, doc_emb, word2idx, idx2word, tfidf_word2idx, max_len=50):
         #trg = [trg len, batch size]
         #teacher_forcing_ratio is probability to use teacher forcing
         #doc_emb = [batch size, embedding_dim]
         trg_len = max_len
-        trg_vocab_size = self.decoder.output_dim
+        batch_size = len(doc_emb)
+        trg_vocab_size = len(word2idx)
         
         #tensor to store decoder outputs
         outputs = torch.zeros(trg_len, batch_size, trg_vocab_size).to(self.device)
         prediction = torch.zeros(trg_len, batch_size)
+        predict_voc = torch.zeros(batch_size, len(tfidf_word2idx))
         
         #last hidden state of the encoder is used as the initial hidden state of the decoder
         # hidden = [n layers, batch size, hid dim]
@@ -126,7 +127,7 @@ class Seq2Seq(nn.Module):
         cell = torch.unsqueeze(doc_emb, 0)
         
         #first input to the decoder is the <sos> tokens
-        input = torch.LongTensor([word2idx["SOS"]] * len(doc_emb)).unsqueeze(0)
+        input = torch.LongTensor([word2idx["<SOS>"]] * len(doc_emb)).to(self.device)
         
         for t in range(1, trg_len):
             
@@ -140,10 +141,14 @@ class Seq2Seq(nn.Module):
             #get the highest predicted token from our predictions
             input = output.argmax(1)
 
+            prediction[t] = input
 
-            if (input == word2idx["EOS"]):
-                break
+            for b in range(batch_size):
+                if (input[b] != word2idx["<SOS>"] and input[b] != word2idx["<PAD>"]
+                     and input[b] != word2idx["<EOS>"] and input[b] != word2idx["<UNK>"]):
+                    input_idx = int(input[b])
+                    predict_label = tfidf_word2idx.get(idx2word[input_idx], -1)
+                    if (predict_label != -1):
+                        predict_voc[b][predict_label] += 1
 
-            prediction[t] = input.item()
-
-        return prediction
+        return prediction.transpose(0, 1), predict_voc
