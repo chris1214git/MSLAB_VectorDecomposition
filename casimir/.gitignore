@@ -1,1 +1,15 @@
-
+data/IMDB.txt
+data/glove*
+data/LIDE_wordemb
+data/docvector.txt
+data/wiki*
+data/precompute_keyword*
+.ipynb_checkpoints/
+__pycache__
+*.npy
+20news*
+test.py
+*.pth
+*.png
+aclImdb
+*.txt
