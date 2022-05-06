@@ -207,7 +207,7 @@ if __name__ == '__main__':
     # data preprocessing
     unpreprocessed_corpus, preprocessed_corpus = get_preprocess_document(**config)
 
-    preprocessed_corpus = preprocessed_corpus[:100]
+    preprocessed_corpus = preprocessed_corpus
 
     texts = [text.split() for text in preprocessed_corpus]
 
