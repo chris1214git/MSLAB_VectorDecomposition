@@ -5,7 +5,7 @@ import gensim.downloader as api
 from scipy.spatial.distance import cosine
 import abc
 
-from utils.rbo import rbo
+from utils import rbo
 import numpy as np
 import itertools
 
