@@ -18,7 +18,7 @@ if config['experiment'] == 'search':
     comb = list(product(batch_size_list, activation_list, lr_list))
     for parameters in comb:
         batch_size, activation, lr = parameters
-        cmd = f"python3 ztm_decoder.py --experiment {config['experiment']} --dataset {config['dataset']}  --activation {activation} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size}"
+        cmd = f"python3 ide_topic.py --experiment {config['experiment']} --dataset {config['dataset']}  --activation {activation} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size}"
         os.system(cmd)
 elif config['experiment'] == 'check':
     print('--- run all dataset & encoder ---')
@@ -33,7 +33,7 @@ elif config['experiment'] == 'check':
     comb = list(product(dataset_list, encoder_list, loss_list))
     for parameters in comb:
         dataset, encoder, loss = parameters
-        cmd = f"python3 ztm_decoder.py --experiment {config['experiment']} --dataset {dataset} --activation {activation} --encoder {encoder} --lr {lr} --loss {loss} --weight_decay {weight_decay} --batch_size {batch_size}"
+        cmd = f"python3 ide_topic.py --experiment {config['experiment']} --dataset {dataset} --activation {activation} --encoder {encoder} --lr {lr} --loss {loss} --weight_decay {weight_decay} --batch_size {batch_size}"
         os.system(cmd)
 else:
     print('--- experiment ---')
@@ -46,5 +46,5 @@ else:
     comb = list(product(activation_list, architecture_list))
     for parameters in comb:
         activation, architecture = parameters
-        cmd = f"python3 ztm_decoder.py --experiment {config['experiment']} --dataset {config['dataset']} --architecture {architecture} --activation {activation} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size}"
+        cmd = f"python3 ide_topic.py --experiment {config['experiment']} --dataset {config['dataset']} --architecture {architecture} --activation {activation} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size}"
         os.system(cmd)

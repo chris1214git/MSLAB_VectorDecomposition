@@ -18,6 +18,7 @@ from contextualized_topic_models.utils.early_stopping.early_stopping import Earl
 from contextualized_topic_models.networks.decoding_network import DecoderNetwork
 ### casimir
 from contextualized_topic_models.evaluation.measures import CoherenceNPMI, TopicDiversity, InvertedRBO
+from utils.loss import ListNet, MythNet
 from utils.eval import retrieval_normalized_dcg_all, retrieval_precision_all, semantic_precision_all, retrieval_precision_all_v2, semantic_precision_all_v2
 from utils.toolbox import get_free_gpu, record_settings
 ###
@@ -107,6 +108,10 @@ class CTM:
         self.word_embeddings = word_embeddings
         self.idx2token = idx2token
         self.distribution_cache = None
+        if config['loss'] == 'mse':
+            self.loss_funct = torch.nn.MSELoss(reduction='mean')
+        else:
+             self.loss_funct = MythNet
         ###
 
         if loss_weights:
@@ -188,10 +193,10 @@ class CTM:
         ### casimir
         # share weight version
         # (1) ListNet
-        recon_dists = torch.nn.functional.normalize(recon_dists, p=1)
-        inputs = torch.nn.functional.normalize(inputs, p=1)  
-        DL = torch.mean(torch.sum(-inputs * torch.log(recon_dists + 1e-10), dim=1))
-
+        # recon_dists = torch.nn.functional.normalize(recon_dists, p=1)
+        # inputs = torch.nn.functional.normalize(inputs, p=1)  
+        # DL = torch.mean(torch.sum(-inputs * torch.log(recon_dists + 1e-10), dim=1))
+        DL = self.loss_funct(recon_dists, inputs)
         #loss = self.weights["beta"]*KL + RL
 
         return KL, RL, DL
@@ -311,24 +316,24 @@ class CTM:
             samples_processed += sp
             e = datetime.datetime.now()
             pbar.update(1)
+            validation_loader = DataLoader(self.validation_data, batch_size=self.batch_size, shuffle=True, num_workers=self.num_data_loader_workers)
+            # if self.validation_data is not None:
+            #     validation_loader = DataLoader(self.validation_data, batch_size=self.batch_size, shuffle=True,
+            #                                    num_workers=self.num_data_loader_workers)
+            #     # train epoch
+            #     s = datetime.datetime.now()
+            #     val_samples_processed, val_loss = self._validation(validation_loader)
+            #     e = datetime.datetime.now()
 
-            if self.validation_data is not None:
-                validation_loader = DataLoader(self.validation_data, batch_size=self.batch_size, shuffle=True,
-                                               num_workers=self.num_data_loader_workers)
-                # train epoch
-                s = datetime.datetime.now()
-                val_samples_processed, val_loss = self._validation(validation_loader)
-                e = datetime.datetime.now()
+            #     # report
+            #     if verbose:
+            #         print("Epoch: [{}/{}]\tSamples: [{}/{}]\tValidation Loss: {}\tTime: {}".format(
+            #             epoch + 1, self.num_epochs, val_samples_processed,
+            #             len(self.validation_data) * self.num_epochs, val_loss, e - s))
 
-                # report
-                if verbose:
-                    print("Epoch: [{}/{}]\tSamples: [{}/{}]\tValidation Loss: {}\tTime: {}".format(
-                        epoch + 1, self.num_epochs, val_samples_processed,
-                        len(self.validation_data) * self.num_epochs, val_loss, e - s))
-
-                pbar.set_description("Epoch: [{}/{}]\t Seen Samples: [{}/{}]\tTrain Loss: {}\tValid Loss: {}\tTime: {}".format(
-                    epoch + 1, self.num_epochs, samples_processed,
-                    len(self.train_data) * self.num_epochs, train_loss, val_loss, e - s))
+            #     pbar.set_description("Epoch: [{}/{}]\t Seen Samples: [{}/{}]\tTrain Loss: {}\tValid Loss: {}\tTime: {}".format(
+            #         epoch + 1, self.num_epochs, samples_processed,
+            #         len(self.train_data) * self.num_epochs, train_loss, val_loss, e - s))
                 
                 ### casimir
                 # (1) comment early_stoping process
@@ -352,7 +357,7 @@ class CTM:
                 val_res, dist_res = self._predict(validation_loader)
                 npmi = CoherenceNPMI(texts=self.texts, topics=self.get_topic_lists(10))
                 diversity = InvertedRBO(topics=self.get_topic_lists(10))
-                record = open('./'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['architecture']+'_'+self.config['activation']+'_'+self.config['encoder']+'_'+self.config['target']+'_lr'+str(self.config['lr'])+'_batch'+str(self.config['batch_size'])+'_weightdecay'+str(self.config['weight_decay'])+'.txt', 'a')
+                record = open('./'+self.config['experiment']+'_'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['architecture']+'_'+self.config['activation']+'_'+self.config['encoder']+'_'+self.config['target']+'_loss_'+self.config['loss']+'_lr'+str(self.config['lr'])+'_batch'+str(self.config['batch_size'])+'_weightdecay'+str(self.config['weight_decay'])+'.txt', 'a')
                 print('---------------------------------------')
                 record.write('-------------------------------------------------\n')
                 print('EPOCH', epoch + 1)

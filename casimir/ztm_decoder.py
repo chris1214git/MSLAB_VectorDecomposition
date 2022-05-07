@@ -21,6 +21,7 @@ torch.set_num_threads(15)
 
 if __name__ =='__main__':
     parser = argparse.ArgumentParser(description='document decomposition.')
+    parser.add_argument('--experiment', type=str, default="check")
     parser.add_argument('--model', type=str, default="ZTM")
     parser.add_argument('--architecture', type=str, default="before")
     parser.add_argument('--activation', type=str, default="sigmoid")
@@ -34,6 +35,7 @@ if __name__ =='__main__':
     parser.add_argument('--target', type=str, default='tf-idf')
     parser.add_argument('--topic_num', type=int, default=50)
     parser.add_argument('--seed', type=int, default=123)
+    parser.add_argument('--loss', type=str, default='listnet')
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--weight_decay', type=float, default=0)
     parser.add_argument('--batch_size', type=int, default=32)

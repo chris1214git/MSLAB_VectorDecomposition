@@ -74,12 +74,14 @@ class DecoderNetwork(nn.Module):
                     nn.Linear(vocab_size, vocab_size*4),
                     nn.BatchNorm1d(vocab_size*4),
                     nn.Tanh(),
+                    nn.Dropout(p=0.2),
                 )
             else:
                 self.half_decoder = nn.Sequential(
                     nn.Linear(vocab_size, vocab_size*4),
                     nn.BatchNorm1d(vocab_size*4),
                     nn.Sigmoid(),
+                    nn.Dropout(p=0.2),
                 )
         else:
             if config['activation'] == 'tanh':
@@ -87,12 +89,14 @@ class DecoderNetwork(nn.Module):
                     nn.Linear(vocab_size+bert_size, vocab_size*4),
                     nn.BatchNorm1d(vocab_size*4),
                     nn.Tanh(),
+                    nn.Dropout(p=0.2),
                 )
             else:
                 self.half_decoder = nn.Sequential(
                     nn.Linear(vocab_size+bert_size, vocab_size*4),
                     nn.BatchNorm1d(vocab_size*4),
                     nn.Sigmoid(),
+                    nn.Dropout(p=0.2),
                 )
         ## real share weight
         self.real_share_wieght_decoder = nn.Sequential(

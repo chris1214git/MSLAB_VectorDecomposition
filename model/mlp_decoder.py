@@ -31,13 +31,13 @@ class MLPNetwork(nn.Module):
         self.output_dim = output_dim
        
         self.network = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            # nn.BatchNorm1d(input_dim*4),
-            nn.Tanh(),
-            nn.Linear(hidden_dim, hidden_dim),
-            # nn.BatchNorm1d(output_dim),
-            nn.Tanh(),
-            nn.Linear(hidden_dim, output_dim),
+            nn.Linear(input_dim, input_dim*4),
+            nn.BatchNorm1d(input_dim*4),
+            nn.Sigmoid(),
+            nn.Dropout(p=0.2),
+            nn.Linear(input_dim*4, output_dim),
+            nn.BatchNorm1d(output_dim),
+            nn.Sigmoid(),
         )
     def forward(self, x):
         decoded = self.network(x)
