@@ -35,6 +35,36 @@ elif config['experiment'] == 'check':
         dataset, encoder, loss = parameters
         cmd = f"python3 ide_topic.py --experiment {config['experiment']} --dataset {dataset} --activation {activation} --encoder {encoder} --lr {lr} --loss {loss} --weight_decay {weight_decay} --batch_size {batch_size}"
         os.system(cmd)
+elif config['experiment'] == 'check_news':
+    print('--- run all 20news & agnews ---')
+    dataset_list = ['20news', 'agnews']
+    encoder_list = ['mpnet', 'bert', 'doc2vec', 'average']
+    loss_list = ['listnet', 'mse']
+    activation = 'sigmoid'
+    batch_size = 16
+    lr = 2e-3
+    weight_decay = 0
+
+    comb = list(product(dataset_list, encoder_list, loss_list))
+    for parameters in comb:
+        dataset, encoder, loss = parameters
+        cmd = f"python3 ide_topic.py --experiment {config['experiment']} --dataset {dataset} --activation {activation} --encoder {encoder} --lr {lr} --loss {loss} --weight_decay {weight_decay} --batch_size {batch_size}"
+        os.system(cmd)
+elif config['experiment'] == 'check_others':
+    print('--- run all IMDB & wiki ---')
+    dataset_list = ['IMDB', 'wiki']
+    encoder_list = ['mpnet', 'bert', 'doc2vec', 'average']
+    loss_list = ['listnet', 'mse']
+    activation = 'sigmoid'
+    batch_size = 16
+    lr = 2e-3
+    weight_decay = 0
+
+    comb = list(product(dataset_list, encoder_list, loss_list))
+    for parameters in comb:
+        dataset, encoder, loss = parameters
+        cmd = f"python3 ide_topic.py --experiment {config['experiment']} --dataset {dataset} --activation {activation} --encoder {encoder} --lr {lr} --loss {loss} --weight_decay {weight_decay} --batch_size {batch_size}"
+        os.system(cmd)
 else:
     print('--- experiment ---')
     activation_list = ['sigmoid', 'tanh']

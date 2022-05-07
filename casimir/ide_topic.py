@@ -50,11 +50,13 @@ if __name__ =='__main__':
 
     # Parameter
     if config['dataset'] == '20news':
-        config['min_df'], config['max_df'], config['min_doc_word'] = 50, 1.0, 15
+        config['min_df'], config['max_df'], config['min_doc_word'] = 62, 1.0, 15
     elif config['dataset'] == 'agnews':
-        config['min_df'], config['max_df'], config['min_doc_word'] = 100, 1.0, 15
+        config['min_df'], config['max_df'], config['min_doc_word'] = 425, 1.0, 15
     elif config['dataset'] == 'IMDB':
-        config['min_df'], config['max_df'], config['min_doc_word'] = 100, 1.0, 15
+        config['min_df'], config['max_df'], config['min_doc_word'] = 166, 1.0, 15
+    elif config['dataset'] == 'wiki':
+        config['min_df'], config['max_df'], config['min_doc_word'] = 2872, 1.0, 15
     elif config['dataset'] == 'tweet':
         config['min_df'], config['max_df'], config['min_doc_word'] = 5, 1.0, 15
     
