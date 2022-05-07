@@ -94,4 +94,6 @@ if __name__ =='__main__':
         except:
             print('[Error] CUDA Memory Insufficient, retry after 15 secondes.')
             time.sleep(15)
+
+    
     
