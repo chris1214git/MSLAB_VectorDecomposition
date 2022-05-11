@@ -57,7 +57,7 @@ def MythNet(y_pred, y_true, eps=1e-10):
     # (3) eps: a small number to avoid error when computing log operation. 
     #     ex: log0 will cause error while log(0+eps) will not.
 
-    #y_pred = torch.sigmoid(y_pred) 
+    y_pred = torch.sigmoid(y_pred) 
     y_pred = torch.nn.functional.normalize(y_pred, dim=1, p=1)
     # y_true = torch.nn.functional.softmax(y_true, dim=1) 
     y_true = torch.nn.functional.normalize(y_true, dim=1, p=1)

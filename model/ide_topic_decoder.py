@@ -54,14 +54,45 @@ class DecoderNetwork(nn.Module):
         # decoder architecture
         self.batch_norm = nn.BatchNorm1d(vocab_size)
         self.word_embedding =  nn.Parameter(torch.randn(vocab_size*4, vocab_size))
-        self.full_decoder = nn.Sequential(
-            nn.Linear(vocab_size, vocab_size*4),
-            nn.BatchNorm1d(vocab_size*4),
-            nn.Sigmoid(),
-            nn.Linear(vocab_size*4, vocab_size),
+        ## architecture - parallel
+        ## architecture - ratio merge
+        self.para_full_decoder_tanh = nn.Sequential(
+            nn.Linear(contextual_size, contextual_size*4),
+            nn.BatchNorm1d(contextual_size*4),
+            nn.Tanh(),
+            nn.Dropout(p=0.2),
+            nn.Linear(contextual_size*4, vocab_size),
             nn.BatchNorm1d(vocab_size),
-            nn.Sigmoid(),
         )
+        self.para_full_decoder_sigmoid = nn.Sequential(
+            nn.Linear(contextual_size, contextual_size*4),
+            nn.BatchNorm1d(contextual_size*4),
+            nn.Sigmoid(),
+            nn.Dropout(p=0.2),
+            nn.Linear(contextual_size*4, vocab_size),
+            nn.BatchNorm1d(vocab_size),
+        )
+        self.compress = nn.Sequential(
+            nn.Linear(vocab_size*2, vocab_size),
+        )
+        ## architecture - concatenate
+        self.con_full_decoder_tanh = nn.Sequential(
+            nn.Linear(contextual_size+vocab_size, (contextual_size+vocab_size)*4),
+            nn.BatchNorm1d((contextual_size+vocab_size)*4),
+            nn.Tanh(),
+            nn.Dropout(p=0.2),
+            nn.Linear((contextual_size+vocab_size)*4, vocab_size),
+            nn.BatchNorm1d(vocab_size),
+        )
+        self.con_full_decoder_sigmoid = nn.Sequential(
+            nn.Linear(contextual_size+vocab_size, (contextual_size+vocab_size)*4),
+            nn.BatchNorm1d((contextual_size+vocab_size)*4),
+            nn.Sigmoid(),
+            nn.Dropout(p=0.2),
+            nn.Linear((contextual_size+vocab_size)*4, vocab_size),
+            nn.BatchNorm1d(vocab_size),
+        )
+        ## architecture - concatenate_word
         self.half_decoder_tanh = nn.Sequential(
             nn.Linear(vocab_size+contextual_size, vocab_size*4),
             nn.BatchNorm1d(vocab_size*4),
@@ -74,13 +105,13 @@ class DecoderNetwork(nn.Module):
             nn.Sigmoid(),
             nn.Dropout(p=0.2),
         )
+        ## architecture - TBD
         self.share_wieght_decoder = nn.Sequential(
             nn.Linear(contextual_size, contextual_size*4),
             nn.BatchNorm1d(contextual_size*4),
             nn.Sigmoid(),
             nn.Linear(contextual_size*4, vocab_size),
             nn.BatchNorm1d(vocab_size),
-            nn.Sigmoid(),
         )
         self.glove_emb_decoder = nn.Sequential(
             nn.Linear(vocab_size+contextual_size, vocab_size*4),
@@ -88,8 +119,8 @@ class DecoderNetwork(nn.Module):
             nn.Sigmoid(),
             nn.Linear(vocab_size*4, glove_word_embeddings.shape[1]),
             nn.BatchNorm1d(glove_word_embeddings.shape[1]),
-            nn.Sigmoid(),
         )
+        
         # topic model architecture
         self.inf_net = ContextualInferenceNetwork(vocab_size, contextual_size, n_components, hidden_sizes, activation, label_size=0)
         
@@ -133,16 +164,42 @@ class DecoderNetwork(nn.Module):
         word_dist = F.softmax(self.beta_batchnorm(torch.matmul(theta, self.beta)), dim=1)
         # word_dist: batch_size x input_size
         self.topic_word_matrix = self.beta
-        
-        if self.config['activation'] == 'tanh':
-            emb_word_dist = torch.cat((word_dist, emb), dim=1)
-            decoded_word_dist = self.half_decoder_tanh(emb_word_dist)
-            recon_dist = torch.sigmoid(self.batch_norm((torch.matmul(decoded_word_dist, self.word_embedding))))
+        if self.config['architecture'] == 'concatenate_word':
+            if self.config['activation'] == 'tanh':
+                emb_word_dist = torch.cat((word_dist, emb), dim=1)
+                decoded_word_dist = self.half_decoder_tanh(emb_word_dist)
+                recon_dist = self.batch_norm((torch.matmul(decoded_word_dist, self.word_embedding)))
+            else:
+                emb_word_dist = torch.cat((word_dist, emb), dim=1)
+                decoded_word_dist = self.half_decoder_sigmoid(emb_word_dist)
+                recon_dist = self.batch_norm((torch.matmul(decoded_word_dist, self.word_embedding)))
+        elif self.config['architecture'] == 'concatenate':
+            if self.config['activation'] == 'tanh':
+                emb_word_dist = torch.cat((word_dist, emb), dim=1)
+                decoded_word_dist = self.con_full_decoder_tanh(emb_word_dist)
+                recon_dist = decoded_word_dist
+            else:
+                emb_word_dist = torch.cat((word_dist, emb), dim=1)
+                decoded_word_dist = self.con_full_decoder_sigmoid(emb_word_dist)
+                recon_dist = decoded_word_dist
+        elif self.config['architecture'] == 'parallel':
+            if self.config['activation'] == 'tanh':
+                emb_word_dist = self.para_full_decoder_tanh(emb)
+                decoded_word_dist = torch.cat((word_dist, emb_word_dist), dim=1)
+                recon_dist = self.compress(decoded_word_dist)
+            else:
+                emb_word_dist = self.para_full_decoder_sigmoid(emb)
+                decoded_word_dist = torch.cat((word_dist, emb_word_dist), dim=1)
+                recon_dist = self.compress(decoded_word_dist)
+        elif self.config['architecture'] == 'ratio_merge':
+            if self.config['activation'] == 'tanh':
+                decoded_word_dist = self.para_full_decoder_tanh(emb)
+                recon_dist = 0.8 * decoded_word_dist + 0.2 * word_dist
+            else:
+                decoded_word_dist = self.para_full_decoder_sigmoid(emb)
+                recon_dist = 0.8 * decoded_word_dist + 0.2 * word_dist
         else:
-            emb_word_dist = torch.cat((word_dist, emb), dim=1)
-            decoded_word_dist = self.half_decoder_sigmoid(emb_word_dist)
-            recon_dist = torch.sigmoid(self.batch_norm((torch.matmul(decoded_word_dist, self.word_embedding))))
-
+            recon_dist = word_dist
         return self.prior_mean, self.prior_variance, posterior_mu, posterior_sigma, posterior_log_sigma, word_dist, recon_dist
     
     def get_theta(self, target, emb, labels=None):

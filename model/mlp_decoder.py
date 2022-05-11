@@ -37,7 +37,7 @@ class MLPNetwork(nn.Module):
             nn.Dropout(p=0.2),
             nn.Linear(input_dim*4, output_dim),
             nn.BatchNorm1d(output_dim),
-            nn.Sigmoid(),
+            # nn.Sigmoid(),
         )
     def forward(self, x):
         decoded = self.network(x)

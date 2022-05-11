@@ -8,13 +8,14 @@ args = parser.parse_args()
 config = vars(args)
 if not config['crossdomain']:
     print('[INFO] Single Dataset Experiment')
-    dataset_list = ['20news', 'agnews', 'IMDB', 'wiki']
+    #dataset_list = ['20news', 'agnews', 'IMDB', 'wiki']
+    dataset='20news'
     encoder_list = ['mpnet', 'bert', 'doc2vec', 'average']
     loss_list = ['bce', 'mse', 'listnet']
 
-    comb = list(product(dataset_list, encoder_list, loss_list))
+    comb = list(product(encoder_list, loss_list))
     for parameters in comb:
-        dataset, encoder, loss = parameters
+        encoder, loss = parameters
         cmd = f"python3 mlp_baseline.py --dataset {dataset} --encoder {encoder} --loss {loss}"
         os.system(cmd)
 else:
