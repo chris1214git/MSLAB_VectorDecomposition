@@ -5,6 +5,14 @@ def MSE(y_pred, y_true):
     loss = nn.MSELoss(reduction='none')(y_pred, y_true)
     return torch.mean(torch.sum(loss, dim=1))
 
+def MSE2(y_pred, y_true):
+    loss = nn.MSELoss(reduction='none')(y_pred, y_true)
+    return torch.mean(torch.mean(loss, dim=1))
+
+def MSE3(y_pred, y_true):
+    loss = nn.MSELoss(reduction='none')(torch.sigmoid(y_pred), y_true)
+    return torch.mean(torch.mean(loss, dim=1))
+
 def topk_MSE(y_pred, y_true, y_rank, topk=64):
 	# calculate MSE on topk value
     y_pred = torch.gather(y_pred, 1, y_rank[:, :topk])
@@ -30,6 +38,60 @@ def ListNet(y_pred, y_true, eps=1e-10):
 
     return torch.mean(-torch.sum(true_smax * preds_log, dim=1))
 
+def ListNet2(y_pred, y_true, eps=1e-10):
+    # ListNet switch softmax to L1 norm
+    # (1) y_pred: the decoded vector. 
+    #     ex: tfidf score of each word in certain document.
+    # (2) y_true: the vector before encoded. 
+    #     ex: same as above.
+    # (3) eps: a small number to avoid error when computing log operation. 
+    #     ex: log0 will cause error while log(0+eps) will not.
+
+    y_pred = torch.sigmoid(y_pred) 
+    y_pred = torch.nn.functional.normalize(y_pred, dim=1, p=2)
+    
+    y_true = torch.nn.functional.normalize(y_true, dim=1, p=2)
+    pred = y_pred + eps
+    pred_log = torch.log(pred)
+
+    return torch.mean(torch.sum(-y_true * pred_log, dim=1))
+
+def ListNet3(y_pred, y_true, eps=1e-10):
+    # ListNet switch softmax to L1 norm
+    # (1) y_pred: the decoded vector. 
+    #     ex: tfidf score of each word in certain document.
+    # (2) y_true: the vector before encoded. 
+    #     ex: same as above.
+    # (3) eps: a small number to avoid error when computing log operation. 
+    #     ex: log0 will cause error while log(0+eps) will not.
+
+    y_pred = torch.sigmoid(y_pred) 
+    y_pred = torch.nn.functional.normalize(y_pred, dim=1, p=2)
+    
+    y_true = torch.nn.functional.normalize(y_true, dim=1, p=2)
+    pred = y_pred + eps
+    pred_log = torch.log(pred)
+
+    return torch.mean(torch.mean(-y_true * pred_log, dim=1))
+
+def ListNet4(y_pred, y_true, eps=1e-10):
+    # ListNet switch softmax to L1 norm
+    # (1) y_pred: the decoded vector. 
+    #     ex: tfidf score of each word in certain document.
+    # (2) y_true: the vector before encoded. 
+    #     ex: same as above.
+    # (3) eps: a small number to avoid error when computing log operation. 
+    #     ex: log0 will cause error while log(0+eps) will not.
+
+    y_pred = torch.exp(y_pred) 
+    y_pred = torch.nn.functional.normalize(y_pred, dim=1, p=2)
+    
+    y_true = torch.nn.functional.normalize(y_true, dim=1, p=2)
+    pred = y_pred + eps
+    pred_log = torch.log(pred)
+
+    return torch.mean(torch.mean(-y_true * pred_log, dim=1))
+    
 def ListNet_nosoftmax(y_pred, y_true, eps=1e-10):
 	# ListNet without softmax
     """

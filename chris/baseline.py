@@ -1,12 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # Demo baseline
-# 
-# ### document embedding decoder
-# 1. demo utils
-# 2. demo loss
-# 3. demo evaluation
+# # MLP baseline
 
 # In[1]:
 
@@ -34,29 +29,10 @@ from utils.data_loader import load_document
 from utils.toolbox import preprocess_document, get_preprocess_document, get_preprocess_document_embs,                          get_preprocess_document_labels, get_preprocess_document_labels_v2, get_word_embs,                          get_free_gpu, merge_targets
 
 
-# ## Data preprocess
-# 1. filter special characters, punctuation (remain english & number character)
-# 2. filter stopwords
-# 3. filter by term frequency
-# 4. pos tagging
-
-# ## Parameters
-# 
-# ### preprocess parameters:
-# 1. min word frequency
-# 2. max word frequency(max_df)
-# 3. min word per doc(min_words)
-# 4. pos tagging select
-# 
-# ### training parameters:
-# 1. decoder label
-# 2. model parameters
-
 # ## Load Data, Label
 # label -> bow, tf-idf, keybert, classification
 
 # In[2]:
-
 import argparse
 parser = argparse.ArgumentParser(description='dnn decoder baseline')
 parser.add_argument('--dataset', type=str, default="20news")
@@ -67,6 +43,14 @@ parser.add_argument('--eval_f1', action="store_true")
 parser.add_argument('--criterion', type=str, default='BCE')
 parser.add_argument('--n_gram', type=int, default=1)
 parser.add_argument('--n_time', type=int, default=5)
+parser.add_argument('--train_size', type=float, default=0.7)
+
+parser.add_argument('--lr', type=float, default=1e-3)
+parser.add_argument('--n_epoch', type=int, default=300)
+parser.add_argument('--dropout', type=float, default=0.2)
+parser.add_argument('--valid_epoch', type=int, default=10)
+parser.add_argument('--h_dim', type=int, default=300)
+parser.add_argument('--target_normalization', action="store_true")
 parser.add_argument('--save_dir', type=str, default='default')
 parser.add_argument('--preprocess_config_dir', type=str, default='parameters_baseline2')
 parser.add_argument('--seed', type=int, default=123)
@@ -89,28 +73,19 @@ n_gram =  config['n_gram']
 # 訓練幾次
 n_time = config['n_time']
 seed = config['seed']
+
+lr = config['lr']
+n_epoch = config['n_epoch']
+valid_epoch = config['valid_epoch']
+h_dim = config['h_dim']
+target_normalization = config['target_normalization']
+
 if dataset2:
     experiment_dir = f'cross_{dataset}_{dataset2}_{model_name}_{label_type}_{criterion}'
 else:
     experiment_dir = f'{dataset}_{model_name}_{label_type}_{criterion}'
     
-save_dir = 'default'
-
-config = {}
-config['experiment_dir'] = experiment_dir
-config['preprocess_config_dir'] = preprocess_config_dir
-config['save_dir'] = save_dir
-config['dataset'] = dataset
-config['dataset2'] = dataset2
-config['model_name'] = model_name
-config['label_type'] = label_type
-config['eval_f1'] = eval_f1
-config['n_gram'] = n_gram
-config['criterion'] = criterion
-config['n_time'] = n_time
-config['seed'] = seed
-
-save_dir = os.path.join('experiment', config['experiment_dir'], config['save_dir'])
+save_dir = os.path.join('experiment', experiment_dir, config['save_dir'])
 os.makedirs(save_dir, exist_ok=False)
 
 
@@ -171,13 +146,6 @@ word_embs_tensor = torch.FloatTensor(word_embs)
 # In[7]:
 
 
-# device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-# device = 'cpu'
-
-
-# In[8]:
-
-
 class DNNDecoderDataset(Dataset):
     def __init__(self, doc_embs, targets):
         
@@ -195,7 +163,7 @@ class DNNDecoderDataset(Dataset):
         return len(self.doc_embs)
 
 
-# In[10]:
+# In[8]:
 
 
 def prepare_dataloader(doc_embs, targets, batch_size=100, train_valid_test_ratio=[0.7, 0.1, 0.2],                       target_normalize=False, seed=123):
@@ -231,42 +199,75 @@ def prepare_dataloader(doc_embs, targets, batch_size=100, train_valid_test_ratio
     valid_loader  = torch.utils.data.DataLoader(valid_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
 
     test_dataset = DNNDecoderDataset(doc_embs[train_size+valid_size:], targets[train_size+valid_size:])
-    test_loader  = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
+    test_loader  = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
     
     return train_loader, valid_loader, test_loader
 
 
-# In[11]:
+# In[9]:
 
 
 # prepare dataloader
-train_loader, valid_loader, test_loader = prepare_dataloader(doc_embs, targets, batch_size=100,                                                             train_valid_test_ratio=[0.7, 0.1, 0.2],target_normalize=True,                                                             seed=seed)
+train_loader, valid_loader, test_loader = prepare_dataloader(doc_embs, targets, batch_size=64, train_valid_test_ratio=[config['train_size'], 0.1, 0.2],                                                             target_normalize=config['target_normalization'],                                                             seed=seed)
 if config['dataset2'] is not None:
-    _, _, test_loader = prepare_dataloader(doc_embs2, targets2, batch_size=100,                                                             train_valid_test_ratio=[0.7, 0.1, 0.2],target_normalize=True,                                                             seed=seed)
+    _, _, test_loader = prepare_dataloader(doc_embs2, targets2, batch_size=64, train_valid_test_ratio=[config['train_size'], 0.1, 0.2],                                           target_normalize=config['target_normalization'],                                           seed=seed)
 
 
-# In[12]:
+# In[10]:
 
+
+# class DNNDecoder(nn.Module):
+#     def __init__(self, doc_emb_dim, num_words, h_dim=300):
+#         super().__init__()
+#         self.decoder = nn.Sequential(
+#             nn.Linear(doc_emb_dim, h_dim),
+#             # nn.Dropout(p=0.5),
+#             nn.Tanh(),
+#             nn.Linear(h_dim, h_dim),
+#             # nn.Dropout(p=0.5),
+#             nn.Tanh(),
+#             nn.Linear(h_dim, num_words),
+#             # nn.Dropout(p=0.5),
+#             # nn.Sigmoid(),
+#         )
+#     def forward(self, x):
+#         return self.decoder(x)
 
 class DNNDecoder(nn.Module):
-    def __init__(self, doc_emb_dim, num_words, h_dim=300):
-        super().__init__()
-        self.decoder = nn.Sequential(
-            nn.Linear(doc_emb_dim, h_dim),
-            # nn.Dropout(p=0.5),
-            nn.Tanh(),
-            nn.Linear(h_dim, h_dim),
-            # nn.Dropout(p=0.5),
-            nn.Tanh(),
-            nn.Linear(h_dim, num_words),
-            # nn.Dropout(p=0.5),
-            # nn.Sigmoid(),
-        )
-    def forward(self, x):
-        return self.decoder(x)
 
+    ### casimir
+    # (1) Add parameter vocab_size
+    def __init__(self, doc_emb_dim, num_words=0, h_dim=300, dropout=0.2):
+        super(DNNDecoder, self).__init__()
+        vocab_size = num_words
+        bert_size = doc_emb_dim
+        
+        self.vocab_size = vocab_size
+        if dropout > 0:
+            self.network = nn.Sequential(
+            nn.Linear(bert_size, bert_size*4),
+            nn.BatchNorm1d(bert_size*4),
+            nn.Sigmoid(),
+            nn.Dropout(p=dropout),
+            nn.Linear(bert_size*4, vocab_size),
+            nn.BatchNorm1d(vocab_size),
+#             nn.Sigmoid(),
+            )
+        else:
+            self.network = nn.Sequential(
+            nn.Linear(bert_size, bert_size*4),
+            nn.BatchNorm1d(bert_size*4),
+            nn.Sigmoid(),
+            nn.Linear(bert_size*4, vocab_size),
+            nn.BatchNorm1d(vocab_size),
+#             nn.Sigmoid(),
+            )
+        
+    def forward(self, x_bert):
+        recon_dist = self.network(x_bert)
 
-# In[13]:
+        return recon_dist
+# In[11]:
 
 
 def evaluate_DNNDecoder(model, data_loader, config, pred_semantic=False):
@@ -305,13 +306,11 @@ def evaluate_DNNDecoder(model, data_loader, config, pred_semantic=False):
             
             # Semantic Precision
             if pred_semantic:
-                semantic_precision_scores, word_result = semantic_precision_all(pred, target, word_embs_tensor, vocabularys,\
-                                                                                k=config["valid_topk"], th=0.5, display_word_result=False)
+                semantic_precision_scores, word_result = semantic_precision_all(pred, target, word_embs_tensor, vocabularys,                                                                                k=config["valid_topk"], th=0.5, display_word_result=False)
                 for k, v in semantic_precision_scores.items():
                     results['semantic_precision@{}'.format(k)].append(v)
                     
-                semantic_precision_scores, word_result = semantic_precision_all_v2(pred, target, word_embs_tensor, vocabularys,\
-                                                                                k=config["valid_topk"], th=0.5, display_word_result=False)
+                semantic_precision_scores, word_result = semantic_precision_all_v2(pred, target, word_embs_tensor, vocabularys,                                                                                k=config["valid_topk"], th=0.5, display_word_result=False)
                 for k, v in semantic_precision_scores.items():
                     results['semantic_precision_v2@{}'.format(k)].append(v)
 
@@ -320,7 +319,8 @@ def evaluate_DNNDecoder(model, data_loader, config, pred_semantic=False):
 
     return results
 
-# In[15]:
+
+# In[12]:
 
 
 def calculate_loss(train_train_config, criterion, pred, target, target_rank, target_topk):
@@ -339,7 +339,7 @@ def calculate_loss(train_train_config, criterion, pred, target, target_rank, tar
     return loss
     
 def train_decoder(doc_embs, targets, train_config):
-    model = DNNDecoder(doc_emb_dim=doc_embs.shape[1], num_words=targets.shape[1],                       h_dim=train_config["h_dim"]).to(device)
+    model = DNNDecoder(doc_emb_dim=doc_embs.shape[1], num_words=targets.shape[1], h_dim=train_config["h_dim"], dropout=config['dropout']).to(device)
     model.train()
 
     opt = torch.optim.Adam(model.parameters(), lr=train_config["lr"], weight_decay=train_config["weight_decay"])
@@ -374,8 +374,6 @@ def train_decoder(doc_embs, targets, train_config):
             target = target.to(device)
             target_rank = target_rank.to(device)
             target_topk = target_topk.to(device)
-            y_pos_id = target_rank[:, :4]
-            y_neg_id = target_rank[:, 4:]
             # loss
             pred = model(doc_embs)
             loss = calculate_loss(train_config, criterion, pred, target, target_rank, target_topk)
@@ -406,9 +404,9 @@ def train_decoder(doc_embs, targets, train_config):
             res = {}
             res['epoch'] = epoch
 
-            train_res_ndcg = evaluate_DNNDecoder(model, train_loader, train_config, epoch == n_epoch-1)
-            valid_res_ndcg = evaluate_DNNDecoder(model, valid_loader, train_config, epoch == n_epoch-1)
-            test_res_ndcg = evaluate_DNNDecoder(model, test_loader, train_config, epoch == n_epoch-1)
+            train_res_ndcg = evaluate_DNNDecoder(model, train_loader, train_config, epoch==n_epoch-1)
+            valid_res_ndcg = evaluate_DNNDecoder(model, valid_loader, train_config, epoch==n_epoch-1)
+            test_res_ndcg = evaluate_DNNDecoder(model, test_loader, train_config, epoch==n_epoch-1)
             
             res['train'] = train_res_ndcg
             res['valid'] = valid_res_ndcg
@@ -435,26 +433,26 @@ def train_experiment(n_time):
     return results
 
 
-# In[16]:
+# In[13]:
 
 
 train_config = {
     "n_time": config['n_time'],
-    "lr": 0.001,
+    "lr": config['lr'],
     "weight_decay": 0.0,
     "loss_topk": 15,
-    
-    "n_epoch": 1000,
-    "valid_epoch": 10,
+    "dropout": config['dropout'],
+
+    "n_epoch": config['n_epoch'],
+    "valid_epoch": config['valid_epoch'],
     "valid_verbose": True,
     "valid_topk": [5, 10, 15],
     
-    "h_dim": 300,
+    "h_dim": config['h_dim'],
     "label_type": config['label_type'],
     "eval_f1": config['eval_f1'],
     "criterion": config['criterion']
 }
-
 
 
 # In[ ]:
@@ -472,22 +470,3 @@ with open(os.path.join(save_dir, 'config.json'), 'w') as f:
 with open(os.path.join(save_dir, 'train_config.json'), 'w') as f:
     json.dump(train_config, f)
 
-
-# ## Result
-# Run 5 times, different model seed, same train/valid/test split, mean/std
-# 1. precision, recall, f1
-# 2. precision, ndcg, semantic precision
-# 
-# Exp:
-# 1. different doc encoder
-# 2. different dataset(mpnet)
-# 3. cross domain(mpnet)
-# 4. different target(mpnet, agnews)(bow, tf-idf, keybert, yake)
-
-# * bow:
-#     3 dataset * bce * 4 models
-# * tf-idf:
-#     3 dataset * listnet * 4 models
-# * keybert, yake:
-#     agnews * listnet * 4 models
-# * cross domain
