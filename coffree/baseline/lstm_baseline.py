@@ -13,9 +13,9 @@ from model import Decoder, Seq2Seq
 from collections import defaultdict
 from sklearn.feature_extraction.text import TfidfVectorizer
 from torch.utils.data import DataLoader, Dataset
-from utils.eval import retrieval_normalized_dcg_all, retrieval_precision_all, retrieval_precision_all_v2
+from utils.eval import retrieval_normalized_dcg_all, retrieval_precision_all, semantic_precision_all, retrieval_precision_all_v2, semantic_precision_all_v2
 from utils.toolbox import same_seeds, show_settings, get_preprocess_document, \
-                            get_preprocess_document_embs, get_free_gpu, get_preprocess_document_labels
+                            get_preprocess_document_embs, get_free_gpu, get_word_embs
 
 
 class LSTMDecoderDataset(Dataset):
@@ -142,7 +142,7 @@ def train(model, iterator, optimizer, criterion, clip):
     return epoch_loss / len(iterator)
 
 
-def evaluate_Decoder(model, data_loader, config, tfidf_word2idx):
+def evaluate_Decoder(model, data_loader, config, tfidf_word2idx, vocab, word_embeddings):
     results = defaultdict(list)
     model.eval()
     
@@ -170,6 +170,15 @@ def evaluate_Decoder(model, data_loader, config, tfidf_word2idx):
         for k, v in ndcg_scores.items():
             results['ndcg@{}'.format(k)].append(v)
 
+        # Semantic Prcision for reconstruct
+        precision_scores, word_result = semantic_precision_all(pred, target, word_embeddings, vocab, k=config['topk'], th = config['threshold'])
+        for k, v in precision_scores.items():
+            results['Semantic Precision v1@{}'.format(k)].append(v)
+
+        precision_scores, word_result = semantic_precision_all_v2(pred, target, word_embeddings, vocab, k=config['topk'], th = config['threshold'])
+        for k, v in precision_scores.items():
+            results['Semantic Precision v2@{}'.format(k)].append(v)
+
     for k in results:
         results[k] = np.mean(results[k])
 
@@ -187,6 +196,7 @@ if __name__ == '__main__':
     parser.add_argument('--min_doc_len', type=int, default=15)
     parser.add_argument('--encoder', type=str, default='bert')
     parser.add_argument('--seed', type=int, default=123)
+    parser.add_argument('--threshold', type=float, default=0.5)
     args = parser.parse_args()
     config = vars(args)
 
@@ -207,8 +217,6 @@ if __name__ == '__main__':
     # data preprocessing
     unpreprocessed_corpus, preprocessed_corpus = get_preprocess_document(**config)
 
-    preprocessed_corpus = preprocessed_corpus
-
     texts = [text.split() for text in preprocessed_corpus]
 
     word2idx, idx2word, labels = get_document_labels(texts, max_len=config["max_len"])
@@ -221,6 +229,10 @@ if __name__ == '__main__':
     # generating document embedding
     doc_embs, doc_model, device = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
     print("Get doc embedding done.")
+
+    # word embedding preparation
+    vocabulary = vectorizer.get_feature_names()
+    word_embeddings = get_word_embs(vocabulary, data_type='tensor', word_emb_file='../../data/glove.6B.300d.txt')
 
     vocabulary_size = len(word2idx)
     embedding_size = 512
@@ -249,6 +261,6 @@ if __name__ == '__main__':
         if ((epoch + 1) % 10 == 0): 
             print("Epoch:{}/{}, train_loss:{}".format(epoch+1, config["num_epoch"], train_loss))
 
-    res = evaluate_Decoder(model, test_loader, config, tfidf_word2idx)
+    res = evaluate_Decoder(model, test_loader, config, tfidf_word2idx, vocabulary, word_embeddings)
     for key, val in res.items():
         print(f"{key}:{val:.4f}")
