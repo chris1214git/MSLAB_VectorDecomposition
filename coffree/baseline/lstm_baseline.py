@@ -265,13 +265,11 @@ if __name__ == '__main__':
     doc_embs, doc_model, device = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
     print("Get doc embedding done.")
 
-
-    if config["target"] == "keybert" or config["target"] == "yake":
-        label, vocabulary = get_preprocess_document_labels_v2(preprocessed_corpus, config, config['preprocess_config_dir'])
-        targets = label[config["target"]].toarray()
-        target_word2idx = {}
-        for idx, word in enumerate(vocabulary):
-            target_word2idx[word] = idx
+    label, vocabulary = get_preprocess_document_labels_v2(preprocessed_corpus, config, config['preprocess_config_dir'])
+    targets = label[config["target"]].toarray()
+    target_word2idx = {}
+    for idx, word in enumerate(vocabulary):
+        target_word2idx[word] = idx
 
     word_embeddings = get_word_embs(vocabulary, data_type='tensor', word_emb_file='../../data/glove.6B.300d.txt')
 
