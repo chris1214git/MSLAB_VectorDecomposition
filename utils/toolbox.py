@@ -9,6 +9,9 @@ from math import log
 from tqdm.auto import tqdm
 from sentence_transformers import SentenceTransformer
 from gensim.models.doc2vec import Doc2Vec, TaggedDocument
+from gensim.models import TfidfModel
+from gensim.corpora import Dictionary
+from gensim.matutils import corpus2dense
 from torch.utils.data import DataLoader, random_split
 from scipy import sparse
 
@@ -268,18 +271,27 @@ def get_preprocess_document_labels(preprocessed_docs, preprocess_config='../chri
     print('Getting preprocess documents labels')
     vectorizer = TfidfVectorizer()
     # covert sparse matrix to numpy array
-    tf_idf_vector = vectorizer.fit_transform(preprocessed_docs).toarray()
-    bow_vector = tf_idf_vector.copy()
+    sklearn_tf_idf_vector = vectorizer.fit_transform(preprocessed_docs).toarray()
+    docs = [doc.split() for doc in preprocessed_docs]
+    gensim_dct = Dictionary(docs)
+    gensim_corpus = [gensim_dct.doc2bow(doc) for doc in docs]
+    model = TfidfModel(gensim_corpus, normalize=False)
+    gensim_vector = model[gensim_corpus]
+    gensim_tf_idf_vector = corpus2dense(gensim_vector, num_terms=len(gensim_dct.keys()), num_docs=gensim_dct.num_docs)
+    gensim_tf_idf_vector = np.array(gensim_tf_idf_vector).T.tolist()
+    bow_vector = sklearn_tf_idf_vector.copy()
     bow_vector[bow_vector > 0] = 1
     bow_vector[bow_vector < 0] = 0
     vocabulary = vectorizer.get_feature_names()
 
     labels = {}
-    labels['tf-idf'] = tf_idf_vector
+    labels['tf-idf'] = sklearn_tf_idf_vector
+    labels['tf-idf-gensim'] = gensim_tf_idf_vector
     labels['bow'] = bow_vector
     
     vocabularys = {}
     vocabularys['tf-idf'] = vocabulary
+    vocabularys['tf-idf-gensim'] = list(zip(*gensim_dct.items()))[1]
     vocabularys['bow'] = vocabulary
 
     return labels, vocabularys
