@@ -1,3 +1,5 @@
+import os
+import json
 import sys
 sys.path.append("../..")
 
@@ -9,6 +11,7 @@ import numpy as np
 import torch.optim as optim
 import torch.nn as nn
 
+from scipy import sparse
 from model import Decoder, Seq2Seq
 from collections import defaultdict
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -103,6 +106,39 @@ def get_document_labels(texts, max_len=50):
     labels = torch.LongTensor(sentence_list)
     return word2idx, idx2word, labels
 
+def get_preprocess_document_labels_v2(preprocessed_corpus, config, preprocess_config_dir, ngram=1):
+    print('Getting preprocess documents labels')
+    print('Finding precompute_keyword by config', config)
+
+    config_dir = os.path.join('../../data/precompute_keyword', preprocess_config_dir, \
+                              '{}_ngram_{}'.format(config['dataset'], ngram))
+
+    # Create tfidf target
+    vectorizer = TfidfVectorizer()
+    targets = vectorizer.fit_transform(preprocessed_corpus).toarray()
+
+    bow_vector = sparse.load_npz(os.path.join(config_dir, 'BOW.npz'))
+    try:
+        keybert_vector = sparse.load_npz(os.path.join(config_dir, 'KeyBERT.npz'))
+        yake_vector = sparse.load_npz(os.path.join(config_dir, 'YAKE.npz'))
+    except:
+        print('no precompute keyword')
+        keybert_vector = None
+        yake_vector = None
+
+    if config["target"] == "tf-idf":
+        vocabulary = vectorizer.get_feature_names()
+    else:
+        vocabulary = np.load(os.path.join(config_dir, 'vocabulary.npy'))
+
+    labels = {}
+    labels['tf-idf'] = targets
+    labels['bow'] = bow_vector
+    labels['keybert'] = keybert_vector
+    labels['yake'] = yake_vector
+    
+    return labels, vocabulary
+
 
 def train(model, iterator, optimizer, criterion, clip):
 
@@ -142,7 +178,7 @@ def train(model, iterator, optimizer, criterion, clip):
     return epoch_loss / len(iterator)
 
 
-def evaluate_Decoder(model, data_loader, config, tfidf_word2idx, vocab, word_embeddings):
+def evaluate_Decoder(model, data_loader, config, target_word2idx, vocab, word_embeddings):
     results = defaultdict(list)
     model.eval()
     
@@ -152,7 +188,7 @@ def evaluate_Decoder(model, data_loader, config, tfidf_word2idx, vocab, word_emb
         
         doc_embs = doc_embs.to(device)
         target = target.to(device)
-        _, pred = model.predict(doc_embs, word2idx, idx2word, tfidf_word2idx)
+        _, pred = model.predict(doc_embs, word2idx, idx2word, target_word2idx)
         pred = pred.to(device)
 
         # Precision
@@ -194,22 +230,24 @@ if __name__ == '__main__':
     parser.add_argument('--topk', type=int, nargs='+', default=[5, 10, 15])
     parser.add_argument('--num_epoch', type=int, default=50)
     parser.add_argument('--min_doc_len', type=int, default=15)
-    parser.add_argument('--encoder', type=str, default='bert')
+    parser.add_argument('--preprocess_config_dir', type=str, default='parameters_baseline2')
+    parser.add_argument('--encoder', type=str, default='mpnet')
     parser.add_argument('--seed', type=int, default=123)
+    parser.add_argument('--min_df', type=float, default=0.003)
     parser.add_argument('--threshold', type=float, default=0.5)
     args = parser.parse_args()
     config = vars(args)
 
     if config['dataset'] == '20news':
-        config['min_df'], config['max_df'], config['min_doc_word'] = 62, 1.0, 15
+        config['max_df'], config['min_doc_word'] = 1.0, 15
     elif config['dataset'] == 'agnews':
-        config['min_df'], config['max_df'], config['min_doc_word'] = 425, 1.0, 15
+        config['max_df'], config['min_doc_word'] = 1.0, 15
     elif config['dataset'] == 'IMDB':
-        config['min_df'], config['max_df'], config['min_doc_word'] = 166, 1.0, 15
+        config['max_df'], config['min_doc_word'] = 1.0, 15
     elif config['dataset'] == 'wiki':
-        config['min_df'], config['max_df'], config['min_doc_word'] = 2872, 1.0, 15
+        config['max_df'], config['min_doc_word'] = 1.0, 15
     elif config['dataset'] == 'tweet':
-        config['min_df'], config['max_df'], config['min_doc_word'] = 5, 1.0, 15
+        config['max_df'], config['min_doc_word'] = 1.0, 15
 
     show_settings(config)
     same_seeds(config["seed"])
@@ -217,21 +255,22 @@ if __name__ == '__main__':
     # data preprocessing
     unpreprocessed_corpus, preprocessed_corpus = get_preprocess_document(**config)
 
+    preprocessed_corpus = preprocessed_corpus
+
     texts = [text.split() for text in preprocessed_corpus]
 
     word2idx, idx2word, labels = get_document_labels(texts, max_len=config["max_len"])
-
-    # Create tfidf target
-    vectorizer = TfidfVectorizer()
-    targets = vectorizer.fit_transform(preprocessed_corpus).toarray()
-    tfidf_word2idx = vectorizer.vocabulary_
 
     # generating document embedding
     doc_embs, doc_model, device = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
     print("Get doc embedding done.")
 
-    # word embedding preparation
-    vocabulary = vectorizer.get_feature_names()
+    label, vocabulary = get_preprocess_document_labels_v2(preprocessed_corpus, config, config['preprocess_config_dir'])
+    targets = label[config["target"]].toarray()
+    target_word2idx = {}
+    for idx, word in enumerate(vocabulary):
+        target_word2idx[word] = idx
+
     word_embeddings = get_word_embs(vocabulary, data_type='tensor', word_emb_file='../../data/glove.6B.300d.txt')
 
     vocabulary_size = len(word2idx)
@@ -261,6 +300,6 @@ if __name__ == '__main__':
         if ((epoch + 1) % 10 == 0): 
             print("Epoch:{}/{}, train_loss:{}".format(epoch+1, config["num_epoch"], train_loss))
 
-    res = evaluate_Decoder(model, test_loader, config, tfidf_word2idx, vocabulary, word_embeddings)
+    res = evaluate_Decoder(model, test_loader, config, target_word2idx, vocabulary, word_embeddings)
     for key, val in res.items():
         print(f"{key}:{val:.4f}")
