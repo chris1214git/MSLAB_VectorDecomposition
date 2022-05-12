@@ -6,7 +6,7 @@ import torch
 import random
 import argparse
 import numpy as np
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, random_split, ConcatDataset
 
 sys.path.append("../")
 from load_pretrain_label import load_preprocess_document_labels
@@ -30,7 +30,7 @@ if __name__ =='__main__':
     parser.add_argument('--vocab_size', type=int, default=0)
     parser.add_argument('--min_doc_word', type=int, default=15)
     parser.add_argument('--encoder', type=str, default='mpnet')
-    parser.add_argument('--target', type=str, default='tf-idf')
+    parser.add_argument('--target', type=str, default='tf-idf-gensim')
     parser.add_argument('--topic_num', type=int, default=50)
     parser.add_argument('--seed', type=int, default=123)
     parser.add_argument('--loss', type=str, default='listnet')
@@ -39,6 +39,7 @@ if __name__ =='__main__':
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--epochs', type=int, default=150)
     parser.add_argument('--ratio', type=float, default=0.8)
+    parser.add_argument('--concatenate_ratio', type=float, default=0)
     parser.add_argument('--topk', type=int, nargs='+', default=[5, 10, 15])
     parser.add_argument('--save', type=bool, default=False)
     parser.add_argument('--threshold', type=float, default=0.5)
@@ -130,8 +131,18 @@ if __name__ =='__main__':
         word_embeddings = get_word_embs(new_vocabularys, data_type='tensor')
 
         # prepare dataset
-        training_set = IDEDataset(unpreprocessed_corpus, doc_embs, targets1)
-        validation_set = IDEDataset(unpreprocessed_corpus2, doc_embs2, targets2)
+        if config['concatenate_ratio'] == 0:
+            print('[INFO] Dataset Concatenate ratio: 0')
+            training_set = IDEDataset(unpreprocessed_corpus, doc_embs, targets1)
+            validation_set = IDEDataset(unpreprocessed_corpus2, doc_embs2, targets2)
+        else:
+            print('[INFO] Dataset Concatenate ratio: {}'.format(config[concatenate_ratio]))
+            dataset_1 = IDEDataset(unpreprocessed_corpus, doc_embs, targets1)
+            dataset_2 = IDEDataset(unpreprocessed_corpus2, doc_embs2, targets2)
+            concatenate_length = int(len(dataset_2) * config['concatenate_ratio'])
+            validation_length = len(dataset_2) - concatenate_length
+            concatenate_set, validation_set = random_split(dataset, lengths=[concatenate_length, validation_length],generator=torch.Generator().manual_seed(42))
+            training_set = ConcatDataset([dataset_1, concatenate_set])
 
         # Declare model & train
         while True:
