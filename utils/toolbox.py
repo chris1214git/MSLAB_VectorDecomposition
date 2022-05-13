@@ -286,12 +286,12 @@ def get_preprocess_document_labels(preprocessed_docs, preprocess_config='../chri
 
     labels = {}
     labels['tf-idf'] = sklearn_tf_idf_vector
-    labels['tf-idf-gensim'] = gensim_tf_idf_vector
+    labels['tf-idf-gensim'] = np.array(gensim_tf_idf_vector)
     labels['bow'] = bow_vector
     
     vocabularys = {}
     vocabularys['tf-idf'] = vocabulary
-    vocabularys['tf-idf-gensim'] = np.array(list(zip(*gensim_dct.items()))[1])
+    vocabularys['tf-idf-gensim'] = list(zip(*gensim_dct.items()))[1]
     vocabularys['bow'] = vocabulary
 
     return labels, vocabularys

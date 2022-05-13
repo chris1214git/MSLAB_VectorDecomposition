@@ -136,12 +136,12 @@ if __name__ =='__main__':
             training_set = IDEDataset(unpreprocessed_corpus, doc_embs, targets1)
             validation_set = IDEDataset(unpreprocessed_corpus2, doc_embs2, targets2)
         else:
-            print('[INFO] Dataset Concatenate ratio: {}'.format(config[concatenate_ratio]))
+            print('[INFO] Dataset Concatenate ratio: {}'.format(config['concatenate_ratio']))
             dataset_1 = IDEDataset(unpreprocessed_corpus, doc_embs, targets1)
             dataset_2 = IDEDataset(unpreprocessed_corpus2, doc_embs2, targets2)
             concatenate_length = int(len(dataset_2) * config['concatenate_ratio'])
             validation_length = len(dataset_2) - concatenate_length
-            concatenate_set, validation_set = random_split(dataset, lengths=[concatenate_length, validation_length],generator=torch.Generator().manual_seed(42))
+            concatenate_set, validation_set = random_split(dataset_2, lengths=[concatenate_length, validation_length],generator=torch.Generator().manual_seed(42))
             training_set = ConcatDataset([dataset_1, concatenate_set])
 
         # Declare model & train
