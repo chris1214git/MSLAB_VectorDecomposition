@@ -38,7 +38,7 @@ class Decoder(nn.Module):
                 
         output, (hidden, cell) = self.rnn(embedded, (hidden, cell))
         
-        #output = [seq len, batch size, hid dim * n directions]
+        #output = [1, batch size, hid dim * n directions]
         #hidden = [n layers * n directions, batch size, hid dim]
         #cell = [n layers * n directions, batch size, hid dim]
         
