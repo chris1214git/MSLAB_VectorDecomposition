@@ -115,7 +115,7 @@ def get_preprocess_document_labels_v2(preprocessed_corpus, config, preprocess_co
 
     # Create tfidf target
     vectorizer = TfidfVectorizer()
-    targets = vectorizer.fit_transform(preprocessed_corpus).toarray()
+    targets = vectorizer.fit_transform(preprocessed_corpus)
 
     bow_vector = sparse.load_npz(os.path.join(config_dir, 'BOW.npz'))
     try:
@@ -233,7 +233,7 @@ if __name__ == '__main__':
     parser.add_argument('--preprocess_config_dir', type=str, default='parameters_baseline2')
     parser.add_argument('--encoder', type=str, default='mpnet')
     parser.add_argument('--seed', type=int, default=123)
-    parser.add_argument('--min_df', type=float, default=0.003)
+    parser.add_argument('--min_df', type=int)
     parser.add_argument('--threshold', type=float, default=0.5)
     args = parser.parse_args()
     config = vars(args)
@@ -299,6 +299,9 @@ if __name__ == '__main__':
         train_loss = train(model, train_loader, optimizer, criterion, CLIP)
         if ((epoch + 1) % 10 == 0): 
             print("Epoch:{}/{}, train_loss:{}".format(epoch+1, config["num_epoch"], train_loss))
+            # res = evaluate_Decoder(model, test_loader, config, target_word2idx, vocabulary, word_embeddings)
+            # for key, val in res.items():
+            #     print(f"{key}:{val:.4f}")
 
     res = evaluate_Decoder(model, test_loader, config, target_word2idx, vocabulary, word_embeddings)
     for key, val in res.items():
