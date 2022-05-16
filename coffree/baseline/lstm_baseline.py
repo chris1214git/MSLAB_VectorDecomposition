@@ -11,6 +11,10 @@ import numpy as np
 import torch.optim as optim
 import torch.nn as nn
 
+from gensim.models import TfidfModel
+from gensim.corpora import Dictionary
+from gensim.matutils import corpus2dense
+
 from scipy import sparse
 from model import Decoder, Seq2Seq
 from collections import defaultdict
@@ -106,7 +110,7 @@ def get_document_labels(texts, max_len=50):
     labels = torch.LongTensor(sentence_list)
     return word2idx, idx2word, labels
 
-def get_preprocess_document_labels_v2(preprocessed_corpus, config, preprocess_config_dir, ngram=1):
+def get_preprocess_document_labels_v2(preprocessed_corpus, config, preprocess_config_dir, delete_idx=None, ngram=1):
     print('Getting preprocess documents labels')
     print('Finding precompute_keyword by config', config)
 
@@ -116,6 +120,15 @@ def get_preprocess_document_labels_v2(preprocessed_corpus, config, preprocess_co
     # Create tfidf target
     vectorizer = TfidfVectorizer()
     targets = vectorizer.fit_transform(preprocessed_corpus)
+
+    # Create tfidf-raw target
+    docs = [doc.split() for doc in preprocessed_corpus]
+    gensim_dct = Dictionary(docs)
+    gensim_corpus = [gensim_dct.doc2bow(doc) for doc in docs]
+    model = TfidfModel(gensim_corpus, normalize=False)
+    gensim_vector = model[gensim_corpus]
+    gensim_tf_idf_vector = corpus2dense(gensim_vector, num_terms=len(gensim_dct.keys()), num_docs=gensim_dct.num_docs)
+    gensim_tf_idf_vector = np.array(gensim_tf_idf_vector).T.tolist()
 
     bow_vector = sparse.load_npz(os.path.join(config_dir, 'BOW.npz'))
     try:
@@ -128,15 +141,18 @@ def get_preprocess_document_labels_v2(preprocessed_corpus, config, preprocess_co
 
     if config["target"] == "tf-idf":
         vocabulary = vectorizer.get_feature_names()
+    elif config["target"] == "tf-idf-gensim":
+        vocabulary = list(zip(*gensim_dct.items()))[1]
     else:
         vocabulary = np.load(os.path.join(config_dir, 'vocabulary.npy'))
 
     labels = {}
-    labels['tf-idf'] = targets
-    labels['bow'] = bow_vector
-    labels['keybert'] = keybert_vector
-    labels['yake'] = yake_vector
-    
+    labels['tf-idf'] = targets.toarray()
+    labels['tf-idf-gensim'] = np.array(gensim_tf_idf_vector)
+    labels['bow'] = bow_vector.toarray()
+    labels['keybert'] = keybert_vector.toarray()
+    labels['yake'] = yake_vector.toarray()
+
     return labels, vocabulary
 
 
@@ -266,7 +282,9 @@ if __name__ == '__main__':
     print("Get doc embedding done.")
 
     label, vocabulary = get_preprocess_document_labels_v2(preprocessed_corpus, config, config['preprocess_config_dir'])
-    targets = label[config["target"]].toarray()
+
+    targets = label[config["target"]]
+
     target_word2idx = {}
     for idx, word in enumerate(vocabulary):
         target_word2idx[word] = idx
