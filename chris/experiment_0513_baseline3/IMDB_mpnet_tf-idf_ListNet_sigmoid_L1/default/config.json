@@ -1,0 +1,1 @@
+{"dataset": "IMDB", "dataset2": null, "model_name": "mpnet", "label_type": "tf-idf", "eval_f1": false, "criterion": "ListNet_sigmoid_L1", "n_gram": 1, "n_time": 1, "train_size": 0.7, "lr": 0.001, "n_epoch": 300, "dropout": 0.2, "valid_epoch": 10, "h_dim": 300, "target_normalization": false, "save_dir": "default", "preprocess_config_dir": "parameters_baseline3", "seed": 123}

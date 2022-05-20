@@ -16,7 +16,7 @@ import json
 import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, random_split
 import torch.nn.functional as F
 import torch.optim as optim
 from tqdm.auto import tqdm
@@ -43,7 +43,7 @@ parser.add_argument('--eval_f1', action="store_true")
 parser.add_argument('--criterion', type=str, default='BCE')
 parser.add_argument('--n_gram', type=int, default=1)
 parser.add_argument('--n_time', type=int, default=5)
-parser.add_argument('--train_size', type=float, default=0.7)
+parser.add_argument('--train_size', type=float, default=0.8)
 
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--n_epoch', type=int, default=300)
@@ -166,14 +166,12 @@ class DNNDecoderDataset(Dataset):
 # In[8]:
 
 
-def prepare_dataloader(doc_embs, targets, batch_size=100, train_valid_test_ratio=[0.7, 0.1, 0.2],                       target_normalize=False, seed=123):
-    train_size = int(len(doc_embs) * train_valid_test_ratio[0])
-    valid_size = int(len(doc_embs) * (train_valid_test_ratio[0] + train_valid_test_ratio[1])) - train_size
-    test_size = len(doc_embs) - train_size - valid_size
-    
+def prepare_dataloader(doc_embs, targets, no_split=False, batch_size=100, train_size_ratio=0.8, target_normalize=False, seed=123):
+    train_size = int(len(doc_embs) * train_size_ratio)
+    test_size = len(doc_embs) - train_size
+
     print('Preparing dataloader')
     print('train size', train_size)
-    print('valid size', valid_size)
     print('test size', test_size)
 
     if target_normalize:
@@ -184,23 +182,12 @@ def prepare_dataloader(doc_embs, targets, batch_size=100, train_valid_test_ratio
         # norm = np.linalg.norm(targets, axis=1).reshape(-1, 1)
         # targets = (targets / norm)
 
-    # shuffle
-    randomize = np.arange(len(doc_embs))
-    np.random.seed(seed)
-    np.random.shuffle(randomize)
-    doc_embs = doc_embs[randomize]
-    targets = targets[randomize]
-    
-    # dataloader
-    train_dataset = DNNDecoderDataset(doc_embs[:train_size], targets[:train_size])
+    dataset = DNNDecoderDataset(doc_embs, targets)
+    train_dataset, test_dataset = random_split(dataset, lengths=[train_size, test_size],generator=torch.Generator().manual_seed(42))
+
     train_loader  = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
-
-    valid_dataset = DNNDecoderDataset(doc_embs[train_size:train_size+valid_size], targets[train_size:train_size+valid_size])
-    valid_loader  = torch.utils.data.DataLoader(valid_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
-
-    test_dataset = DNNDecoderDataset(doc_embs[train_size+valid_size:], targets[train_size+valid_size:])
+    valid_loader  = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
     test_loader  = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
-    
     return train_loader, valid_loader, test_loader
 
 
@@ -208,30 +195,15 @@ def prepare_dataloader(doc_embs, targets, batch_size=100, train_valid_test_ratio
 
 
 # prepare dataloader
-train_loader, valid_loader, test_loader = prepare_dataloader(doc_embs, targets, batch_size=64, train_valid_test_ratio=[config['train_size'], 0.1, 0.2],                                                             target_normalize=config['target_normalization'],                                                             seed=seed)
-if config['dataset2'] is not None:
-    _, _, test_loader = prepare_dataloader(doc_embs2, targets2, batch_size=64, train_valid_test_ratio=[config['train_size'], 0.1, 0.2],                                           target_normalize=config['target_normalization'],                                           seed=seed)
+if config['dataset2'] is None:
+    train_loader, valid_loader, test_loader = prepare_dataloader(doc_embs, targets, batch_size=64, train_size_ratio=config['train_size'], \
+                                                                target_normalize=config['target_normalization'], seed=seed)
+else:
+    train_loader, valid_loader, _ = prepare_dataloader(doc_embs, targets, batch_size=64, train_size_ratio=0.99, \
+                                                                target_normalize=config['target_normalization'], seed=seed)
+    test_loader, _, _ = prepare_dataloader(doc_embs2, targets2, batch_size=64, train_size_ratio=0.99, \
+                                           target_normalize=config['target_normalization'], seed=seed)
 
-
-# In[10]:
-
-
-# class DNNDecoder(nn.Module):
-#     def __init__(self, doc_emb_dim, num_words, h_dim=300):
-#         super().__init__()
-#         self.decoder = nn.Sequential(
-#             nn.Linear(doc_emb_dim, h_dim),
-#             # nn.Dropout(p=0.5),
-#             nn.Tanh(),
-#             nn.Linear(h_dim, h_dim),
-#             # nn.Dropout(p=0.5),
-#             nn.Tanh(),
-#             nn.Linear(h_dim, num_words),
-#             # nn.Dropout(p=0.5),
-#             # nn.Sigmoid(),
-#         )
-#     def forward(self, x):
-#         return self.decoder(x)
 
 class DNNDecoder(nn.Module):
 
@@ -404,9 +376,9 @@ def train_decoder(doc_embs, targets, train_config):
             res = {}
             res['epoch'] = epoch
 
-            train_res_ndcg = evaluate_DNNDecoder(model, train_loader, train_config, epoch==n_epoch-1)
-            valid_res_ndcg = evaluate_DNNDecoder(model, valid_loader, train_config, epoch==n_epoch-1)
-            test_res_ndcg = evaluate_DNNDecoder(model, test_loader, train_config, epoch==n_epoch-1)
+            train_res_ndcg = evaluate_DNNDecoder(model, train_loader, train_config, False)
+            valid_res_ndcg = evaluate_DNNDecoder(model, valid_loader, train_config, False)
+            test_res_ndcg = evaluate_DNNDecoder(model, test_loader, train_config, False)
             
             res['train'] = train_res_ndcg
             res['valid'] = valid_res_ndcg
@@ -446,7 +418,7 @@ train_config = {
     "n_epoch": config['n_epoch'],
     "valid_epoch": config['valid_epoch'],
     "valid_verbose": True,
-    "valid_topk": [5, 10, 15],
+    "valid_topk": [5, 10, 15, 20, 25, 30, 35, 40, 45, 50],
     
     "h_dim": config['h_dim'],
     "label_type": config['label_type'],
