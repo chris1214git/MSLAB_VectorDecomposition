@@ -53,7 +53,7 @@ def pad_sequence(sentence, word2idx, sen_len):
     assert len(sentence) == sen_len
     return sentence
 
-def prepare_dataloader(doc_embs, targets, labels, batch_size=100, train_valid_test_ratio=[0.7, 0.1, 0.2]):
+def prepare_dataloader(doc_embs, targets, labels, batch_size=100, train_valid_test_ratio=[0.5, 0.3, 0.2]):
     train_size = int(len(doc_embs) * train_valid_test_ratio[0])
     valid_size = int(len(doc_embs) * (train_valid_test_ratio[0] + train_valid_test_ratio[1])) - train_size
     test_size = len(doc_embs) - train_size - valid_size
@@ -241,7 +241,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='document decomposition.')
     parser.add_argument('--model', type=str, default="ZTM")
     parser.add_argument('--dataset', type=str, default="20news")
-    parser.add_argument('--target', type=str, default='tf-idf')
+    parser.add_argument('--target', type=str, default='tf-idf-gensim')
     parser.add_argument('--max_len', type=int, default=30)
     parser.add_argument('--topk', type=int, nargs='+', default=[5, 10, 15])
     parser.add_argument('--num_epoch', type=int, default=50)
@@ -249,7 +249,7 @@ if __name__ == '__main__':
     parser.add_argument('--preprocess_config_dir', type=str, default='parameters_baseline2')
     parser.add_argument('--encoder', type=str, default='mpnet')
     parser.add_argument('--seed', type=int, default=123)
-    parser.add_argument('--min_df', type=int)
+    parser.add_argument('--min_df', type=float)
     parser.add_argument('--threshold', type=float, default=0.5)
     args = parser.parse_args()
     config = vars(args)
