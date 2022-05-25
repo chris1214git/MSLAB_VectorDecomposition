@@ -334,6 +334,45 @@ def get_preprocess_document_labels_v2(preprocessed_docs, preprocess_config, prep
     labels['keybert'] = keybert_vector
     labels['yake'] = yake_vector
     
+    print('Getting gensim tf-idf labels')
+    vectorizer = TfidfVectorizer()
+    # covert sparse matrix to numpy array
+    sklearn_tf_idf_vector = vectorizer.fit_transform(preprocessed_docs).toarray()
+    docs = [doc.split() for doc in preprocessed_docs]
+    gensim_dct = Dictionary(docs)
+    gensim_corpus = [gensim_dct.doc2bow(doc) for doc in docs]
+    model = TfidfModel(gensim_corpus, normalize=False)
+    gensim_vector = model[gensim_corpus]
+    gensim_tf_idf_vector = corpus2dense(gensim_vector, num_terms=len(gensim_dct.keys()), num_docs=gensim_dct.num_docs)
+    gensim_tf_idf_vector = np.array(gensim_tf_idf_vector).T
+    vocabulary_gensim = list(zip(*gensim_dct.items()))[1]
+    gensim_token2id = {}
+    for i in range(len(vocabulary_gensim)):
+        gensim_token2id[vocabulary_gensim[i]] = i
+
+    reindex = []
+    missing_cnt = 0
+    for s in vocabulary:
+        if s in gensim_token2id:
+            reindex.append(gensim_token2id[s])
+        else:    
+            reindex.append(-1)
+            missing_cnt += 1
+    print('gensim missing word num', missing_cnt)
+
+    new_gensim_tf_idf_vector = []
+    for idx in reindex:
+        if idx > 0:
+            new_gensim_tf_idf_vector.append(gensim_tf_idf_vector[:, idx])
+        else:
+            new_gensim_tf_idf_vector.append(np.zeros(gensim_tf_idf_vector.shape[0]))
+    new_gensim_tf_idf_vector = np.array(new_gensim_tf_idf_vector).T
+
+    assert new_gensim_tf_idf_vector.shape == tf_idf_vector.shape
+    new_gensim_tf_idf_vector = sparse.csr_matrix(new_gensim_tf_idf_vector)
+    
+    labels['tf-idf-gensim'] = new_gensim_tf_idf_vector
+    
     return labels, vocabulary
     
 def merge_targets(targets, targets2, vocabularys, vocabularys2):

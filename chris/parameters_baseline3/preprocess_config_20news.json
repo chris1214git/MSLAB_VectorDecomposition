@@ -1,0 +1,1 @@
+{"dataset": "20news", "min_df": 20, "max_df": 1.0, "vocabulary_size": null, "min_doc_word": 15}
