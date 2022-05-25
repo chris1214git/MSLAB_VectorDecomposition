@@ -34,13 +34,14 @@ if __name__ =='__main__':
     parser.add_argument('--topic_num', type=int, default=50)
     parser.add_argument('--seed', type=int, default=123)
     parser.add_argument('--loss', type=str, default='listnet')
-    parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--lr', type=float, default=2e-3)
     parser.add_argument('--weight_decay', type=float, default=0)
-    parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--epochs', type=int, default=150)
+    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--epochs', type=int, default=300)
     parser.add_argument('--ratio', type=float, default=0.8)
     parser.add_argument('--concatenate_ratio', type=float, default=0)
-    parser.add_argument('--topk', type=int, nargs='+', default=[5, 10, 15])
+    parser.add_argument('--topk', type=int, nargs='+', default=[5, 10, 15, 20, 25, 30, 35, 40, 45, 50])
+    parser.add_argument('--semantic', type=bool, default=False)
     parser.add_argument('--save', type=bool, default=False)
     parser.add_argument('--threshold', type=float, default=0.5)
     parser.add_argument('--check_document', type=bool, default=False)
@@ -141,7 +142,7 @@ if __name__ =='__main__':
             dataset_2 = IDEDataset(unpreprocessed_corpus2, doc_embs2, targets2)
             concatenate_length = int(len(dataset_2) * config['concatenate_ratio'])
             validation_length = len(dataset_2) - concatenate_length
-            concatenate_set, validation_set = random_split(dataset_2, lengths=[concatenate_length, validation_length],generator=torch.Generator().manual_seed(42))
+            concatenate_set, validation_set = random_split(dataset_2, lengths=[concatenate_length, validation_length],generator=torch.Generator().manual_seed(1297))
             training_set = ConcatDataset([dataset_1, concatenate_set])
 
         # Declare model & train

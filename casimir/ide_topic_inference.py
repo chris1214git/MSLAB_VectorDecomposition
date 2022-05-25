@@ -21,51 +21,78 @@ if not config['crossdomain']:
             batch_size, activation, lr = parameters
             cmd = f"python3 ide_topic.py --experiment {config['experiment']} --dataset {config['dataset']}  --activation {activation} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size}"
             os.system(cmd)
-    elif config['experiment'] == 'check':
-        print('--- run all dataset & encoder ---')
-        dataset_list = ['20news', 'agnews', 'IMDB', 'wiki']
-        encoder_list = ['mpnet', 'bert', 'doc2vec', 'average']
-        loss_list = ['listnet', 'mse']
-        activation = 'sigmoid'
+    
+    elif config['experiment'] == 'p_value_20news':
+        print('[p-value] Fix 20news')
+        dataset = '20news'
+        encoder_list = ['bert', 'doc2vec', 'average']
+        architecture = 'concatenate'
+        target = 'tf-idf-gensim'
         batch_size = 16
         lr = 2e-3
         weight_decay = 0
+        seed_list = [123, 234, 345, 456, 567, 678, 789, 890, 910, 911]
+        ratio = 0.5
 
-        comb = list(product(dataset_list, encoder_list, loss_list))
+        comb = list(product(encoder_list, seed_list))
         for parameters in comb:
-            dataset, encoder, loss = parameters
-            cmd = f"python3 ide_topic.py --experiment {config['experiment']} --dataset {dataset} --activation {activation} --encoder {encoder} --lr {lr} --loss {loss} --weight_decay {weight_decay} --batch_size {batch_size}"
+            encoder, seed = parameters
+            cmd = f"python3 ide_topic.py --experiment {config['experiment']+str(int(ratio*100))+'_'+str(seed)} --dataset {dataset} --architecture {architecture} --encoder {encoder} --target {target} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size} --epochs {300} --seed {seed}"
             os.system(cmd)
-    elif config['experiment'] == 'check_news':
-        print('--- run all 20news & agnews ---')
-        dataset_list = ['20news', 'agnews']
-        encoder_list = ['mpnet', 'bert', 'doc2vec', 'average']
-        loss_list = ['listnet', 'mse']
-        activation = 'sigmoid'
+    
+    elif config['experiment'] == 'p_value_mpnet':
+        print('[p-value] Fix mpnet')
+        dataset_list = ['agnews', 'IMDB', 'wiki']
+        encoder = 'mpnet'
+        architecture = 'concatenate'
+        target = 'tf-idf-gensim'
         batch_size = 16
         lr = 2e-3
         weight_decay = 0
+        seed_list = [123, 234, 345, 456, 567, 678, 789, 890, 910, 911]
+        ratio = 0.5
 
-        comb = list(product(dataset_list, encoder_list, loss_list))
+        comb = list(product(dataset_list, seed_list))
         for parameters in comb:
-            dataset, encoder, loss = parameters
-            cmd = f"python3 ide_topic.py --experiment {config['experiment']} --dataset {dataset} --activation {activation} --encoder {encoder} --lr {lr} --loss {loss} --weight_decay {weight_decay} --batch_size {batch_size}"
+            dataset, seed = parameters
+            cmd = f"python3 ide_topic.py --experiment {config['experiment']+str(int(ratio*100))+'_'+str(seed)} --dataset {dataset} --architecture {architecture} --encoder {encoder} --target {target} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size} --epochs {300} --seed {seed}"
             os.system(cmd)
-    elif config['experiment'] == 'check_others':
-        print('--- run all IMDB & wiki ---')
-        dataset_list = ['IMDB', 'wiki']
-        encoder_list = ['mpnet', 'bert', 'doc2vec', 'average']
-        loss_list = ['listnet', 'mse']
-        activation = 'sigmoid'
+    elif config['experiment'] == 'p_value_target':
+        print('[p-value] Fix 20news & mpnet')
+        dataset = '20news'
+        encoder = 'mpnet'
+        architecture = 'concatenate'
+        target_list = ['keybert', 'yake', 'tf-idf']
         batch_size = 16
         lr = 2e-3
         weight_decay = 0
+        seed_list = [123, 234, 345, 456, 567, 678, 789, 890, 910, 911]
+        ratio = 0.5
 
-        comb = list(product(dataset_list, encoder_list, loss_list))
+        comb = list(product(target_list, seed_list))
         for parameters in comb:
-            dataset, encoder, loss = parameters
-            cmd = f"python3 ide_topic.py --experiment {config['experiment']} --dataset {dataset} --activation {activation} --encoder {encoder} --lr {lr} --loss {loss} --weight_decay {weight_decay} --batch_size {batch_size}"
+            target, seed = parameters
+            cmd = f"python3 ide_topic.py --experiment {config['experiment']+str(int(ratio*100))+'_'+str(seed)} --dataset {dataset} --architecture {architecture} --encoder {encoder} --target {target} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size} --epochs {300} --seed {seed}"
             os.system(cmd)
+
+    elif config['experiment'] == 'p_value_train_ratio':
+        print('[p-value] Fix 20news & mpnet, but training ratio')
+        dataset = '20news'
+        encoder_list = ['mpnet', 'bert', 'doc2vec', 'average']
+        architecture = 'concatenate'
+        target = 'tf-idf-gensim'
+        batch_size = 16
+        lr = 2e-3
+        weight_decay = 0
+        seed_list = [123, 234, 345, 456, 567, 678, 789, 890, 910, 911]
+        ratio_list = [0.5, 0.3, 0.1]
+
+        comb = list(product(encoder_list, seed_list, ratio_list))
+        for parameters in comb:
+            encoder, seed, ratio = parameters
+            cmd = f"python3 ide_topic.py --experiment {config['experiment']+str(int(ratio*100))+'_'+str(seed)} --dataset {dataset} --architecture {architecture} --encoder {encoder} --target {target} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size} --epochs {300} --seed {seed} --ratio {ratio}"
+            os.system(cmd)
+
     else:
         print('--- experiment ---')
         activation_list = ['sigmoid', 'tanh']
@@ -82,7 +109,7 @@ if not config['crossdomain']:
 else:
     print('--- Cross Domain ---')
     dataset2_list = ['20news', 'agnews', 'IMDB']
-    epochs = 300
+    epochs = 50
     batch_size = 16
     lr = 2e-3
     weight_decay = 0

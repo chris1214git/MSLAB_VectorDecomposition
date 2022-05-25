@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import pandas as pd
 import multiprocessing as mp
 from collections import defaultdict
 from torch.utils.data import Dataset, DataLoader
@@ -324,13 +325,14 @@ class IDETopicDecoder:
             val_loss += loss.item()
 
              # Semantic Prcision for reconstruct
-            precision_scores, word_result = semantic_precision_all(recon_dists, target, self.word_embeddings, self.vocab, k=self.config['topk'], th = self.config['threshold'])
-            for k, v in precision_scores.items():
-                results['[Recon] Semantic Precision v1@{}'.format(k)].append(v)
+            if self.config['semantic']:
+                precision_scores, word_result = semantic_precision_all(recon_dists, target, self.word_embeddings, self.vocab, k=self.config['topk'], th = self.config['threshold'])
+                for k, v in precision_scores.items():
+                    results['[Recon] Semantic Precision v1@{}'.format(k)].append(v)
 
-            precision_scores, word_result = semantic_precision_all_v2(recon_dists, target, self.word_embeddings, self.vocab, k=self.config['topk'], th = self.config['threshold'])
-            for k, v in precision_scores.items():
-                results['[Recon] Semantic Precision v2@{}'.format(k)].append(v)
+                precision_scores, word_result = semantic_precision_all_v2(recon_dists, target, self.word_embeddings, self.vocab, k=self.config['topk'], th = self.config['threshold'])
+                for k, v in precision_scores.items():
+                    results['[Recon] Semantic Precision v2@{}'.format(k)].append(v)
                 
             # Precision for reconstruct
             precision_scores = retrieval_precision_all(recon_dists, target, k=self.config['topk'])
@@ -347,13 +349,14 @@ class IDETopicDecoder:
                 results['[Recon] ndcg@{}'.format(k)].append(v)
 
             # Semantic Prcision for word dist
-            precision_scores, word_result = semantic_precision_all(word_dists, target, self.word_embeddings, self.vocab, k=self.config['topk'], th = self.config['threshold'])
-            for k, v in precision_scores.items():
-                dists['[Word Dist] Semantic Precision v1@{}'.format(k)].append(v)
+            if self.config['semantic']:
+                precision_scores, word_result = semantic_precision_all(word_dists, target, self.word_embeddings, self.vocab, k=self.config['topk'], th = self.config['threshold'])
+                for k, v in precision_scores.items():
+                    dists['[Word Dist] Semantic Precision v1@{}'.format(k)].append(v)
 
-            precision_scores, word_result = semantic_precision_all_v2(word_dists, target, self.word_embeddings, self.vocab, k=self.config['topk'], th = self.config['threshold'])
-            for k, v in precision_scores.items():
-                dists['[Word Dist] Semantic Precision v2@{}'.format(k)].append(v)
+                precision_scores, word_result = semantic_precision_all_v2(word_dists, target, self.word_embeddings, self.vocab, k=self.config['topk'], th = self.config['threshold'])
+                for k, v in precision_scores.items():
+                    dists['[Word Dist] Semantic Precision v2@{}'.format(k)].append(v)
                 
             # Precision for word dist
             precision_scores = retrieval_precision_all(word_dists, target, k=self.config['topk'])
@@ -424,10 +427,19 @@ class IDETopicDecoder:
                 record.write('NPMI: '+ str(npmi.score()) + '\n')
                 record.write('IRBO: '+ str(diversity.score()) + '\n')
 
+                if (epoch + 1) == 10:
+                    recon_df = pd.DataFrame.from_dict(val_res, orient='index').T
+                    dist_df = pd.DataFrame.from_dict(dist_res, orient='index').T
+                else:
+                    recon_df = pd.concat([recon_df, pd.DataFrame.from_dict(val_res, orient='index').T], axis=0)
+                    dist_df = pd.concat([dist_df, pd.DataFrame.from_dict(dist_res, orient='index').T], axis=0)
+
             self.best_components = self.model.beta
             pbar.set_description("Epoch: [{}/{}]\t Seen Samples: [{}/{}]\tTrain Loss: {}\tTime: {}".format(
                 epoch + 1, self.num_epochs, samples_processed,
                 len(training_set) * self.num_epochs, train_loss, e - s))
+        recon_df.to_csv('./'+self.config['experiment']+'_recon_'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['architecture']+'_'+self.config['activation']+'_'+self.config['encoder']+'_'+self.config['target']+'_loss_'+self.config['loss']+'_lr'+str(self.config['lr'])+'_batch'+str(self.config['batch_size'])+'_weightdecay'+str(self.config['weight_decay'])+'.csv', index=False)
+        dist_df.to_csv('./'+self.config['experiment']+'_dist_'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['architecture']+'_'+self.config['activation']+'_'+self.config['encoder']+'_'+self.config['target']+'_loss_'+self.config['loss']+'_lr'+str(self.config['lr'])+'_batch'+str(self.config['batch_size'])+'_weightdecay'+str(self.config['weight_decay'])+'.csv', index=False)
         pbar.close()
     
     def get_topic_lists(self, k=10):
