@@ -53,7 +53,7 @@ def pad_sequence(sentence, word2idx, sen_len):
     assert len(sentence) == sen_len
     return sentence
 
-def prepare_dataloader(doc_embs, targets, labels, batch_size=100, train_valid_test_ratio=[0.5, 0.3, 0.2]):
+def prepare_dataloader(doc_embs, targets, labels, batch_size=100, train_valid_test_ratio=[0.8, 0.1, 0.1]):
     train_size = int(len(doc_embs) * train_valid_test_ratio[0])
     valid_size = int(len(doc_embs) * (train_valid_test_ratio[0] + train_valid_test_ratio[1])) - train_size
     test_size = len(doc_embs) - train_size - valid_size
@@ -243,27 +243,24 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, default="20news")
     parser.add_argument('--target', type=str, default='tf-idf-gensim')
     parser.add_argument('--max_len', type=int, default=30)
-    parser.add_argument('--topk', type=int, nargs='+', default=[5, 10, 15])
+    parser.add_argument('--topk', type=int, nargs='+', default=[5, 10, 15, 20, 25, 30, 35, 40, 45, 50])
     parser.add_argument('--num_epoch', type=int, default=50)
     parser.add_argument('--min_doc_len', type=int, default=15)
     parser.add_argument('--preprocess_config_dir', type=str, default='parameters_baseline2')
     parser.add_argument('--encoder', type=str, default='mpnet')
     parser.add_argument('--seed', type=int, default=123)
-    parser.add_argument('--min_df', type=float)
     parser.add_argument('--threshold', type=float, default=0.5)
     args = parser.parse_args()
     config = vars(args)
 
     if config['dataset'] == '20news':
-        config['max_df'], config['min_doc_word'] = 1.0, 15
+        config["min_df"], config['max_df'], config['min_doc_word'] = 62, 1.0, 15
     elif config['dataset'] == 'agnews':
-        config['max_df'], config['min_doc_word'] = 1.0, 15
+        config["min_df"], config['max_df'], config['min_doc_word'] = 425, 1.0, 15
     elif config['dataset'] == 'IMDB':
-        config['max_df'], config['min_doc_word'] = 1.0, 15
+        config["min_df"], config['max_df'], config['min_doc_word'] = 166, 1.0, 15
     elif config['dataset'] == 'wiki':
-        config['max_df'], config['min_doc_word'] = 1.0, 15
-    elif config['dataset'] == 'tweet':
-        config['max_df'], config['min_doc_word'] = 1.0, 15
+        config["min_df"], config['max_df'], config['min_doc_word'] = 2872, 1.0, 15
 
     show_settings(config)
     same_seeds(config["seed"])
@@ -293,7 +290,7 @@ if __name__ == '__main__':
 
     vocabulary_size = len(word2idx)
     embedding_size = 512
-    hidden_size = doc_embs.shape[1]
+    hidden_size = 300
     num_layer = 1
     drop_out = 0
 

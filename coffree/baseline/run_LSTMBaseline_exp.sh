@@ -1,3 +1,13 @@
+# python lstm_baseline.py --encoder=mpnet --dataset=20news | tee record/EXP_20news.txt &&
+# python lstm_baseline.py --encoder=mpnet --dataset=agnews | tee record/EXP_agnews.txt &&
+# python lstm_baseline.py --encoder=mpnet --dataset=IMDB | tee record/EXP_IMDB.txt &&
+# python lstm_baseline.py --dataset=20news --encoder=bert | tee record/EXP_Bert.txt &&
+# python lstm_baseline.py --dataset=20news --encoder=mpnet | tee record/EXP_SBERT.txt &&
+python lstm_baseline.py --dataset=20news --encoder=average | tee record/EXP_Glove.txt &&
+python lstm_baseline.py --dataset=20news --encoder=doc2vec | tee record/EXP_doc2vec.txt &&
+python lstm_baseline.py --dataset=20news --encoder=mpnet --target=keybert | tee record/EXP_Keybert.txt &&
+python lstm_baseline.py --dataset=20news --encoder=mpnet --target=yake | tee record/EXP_Yake.txt
+
 # EXP 1 SBERT embedding on different datasets
 # python lstm_baseline.py --encoder=mpnet --dataset=20news | tee record/EXP_1_20news.txt &&
 # python lstm_baseline.py --encoder=mpnet --dataset=agnews | tee record/EXP_1_agnews.txt &&
@@ -36,12 +46,12 @@
 # python lstm_baseline.py --dataset=20news --encoder=mpnet --target=keybert --min_df=62 | tee record/EXP_8_Keybert.txt &&
 # python lstm_baseline.py --dataset=20news --encoder=mpnet --target=yake --min_df=62 | tee record/EXP_8_Yake.txt
 # EXP 9 min_df=1/300, different embedding train_size=0.5
+# python lstm_baseline.py --dataset=20news --encoder=mpnet --target=tf-idf --min_df=0.003 | tee record/EXP_TFIDF_SBERT.txt &&
 # python lstm_baseline.py --dataset=20news --encoder=bert --min_df=0.003 | tee record/EXP_9_Bert.txt &&
 # python lstm_baseline.py --dataset=20news --encoder=mpnet --min_df=0.003 | tee record/EXP_9_SBERT.txt &&
 # python lstm_baseline.py --dataset=20news --encoder=average --min_df=0.003 | tee record/EXP_9_Glove.txt &&
 # python lstm_baseline.py --dataset=20news --encoder=doc2vec --min_df=0.003 | tee record/EXP_9_doc2vec.txt &&
 # EXP 10 min_df=1/300, different dataset train_size=0.5
-python lstm_baseline.py --encoder=mpnet --dataset=20news --min_df=0.003 | tee record/EXP_10_20news.txt &&
-python lstm_baseline.py --encoder=mpnet --dataset=agnews --min_df=0.003 | tee record/EXP_10_agnews.txt &&
-python lstm_baseline.py --encoder=mpnet --dataset=IMDB --min_df=0.003 | tee record/EXP_10_IMDB.txt &&
-python lstm_baseline.py --dataset=20news --encoder=average --min_df=0.003 | tee record/EXP_9_Glove.txt
+# python lstm_baseline.py --encoder=mpnet --dataset=20news --min_df=0.003 | tee record/EXP_10_20news.txt &&
+# python lstm_baseline.py --encoder=mpnet --dataset=agnews --min_df=0.003 | tee record/EXP_10_agnews.txt &&
+# python lstm_baseline.py --encoder=mpnet --dataset=IMDB --min_df=0.003 | tee record/EXP_10_IMDB.txt
