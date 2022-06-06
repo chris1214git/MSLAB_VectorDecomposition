@@ -290,7 +290,7 @@ if __name__ == '__main__':
 
     vocabulary_size = len(word2idx)
     embedding_size = 512
-    hidden_size = 300
+    hidden_size = doc_embs.shape[1]
     num_layer = 1
     drop_out = 0
 
