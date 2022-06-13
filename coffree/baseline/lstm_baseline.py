@@ -250,6 +250,7 @@ if __name__ == '__main__':
     parser.add_argument('--encoder', type=str, default='mpnet')
     parser.add_argument('--seed', type=int, default=123)
     parser.add_argument('--threshold', type=float, default=0.5)
+    parser.add_argument('--dataset2', type=str, default=None)
     args = parser.parse_args()
     config = vars(args)
 
@@ -272,33 +273,56 @@ if __name__ == '__main__':
 
     texts = [text.split() for text in preprocessed_corpus]
 
-    word2idx, idx2word, labels = get_document_labels(texts, max_len=config["max_len"])
 
-    # generating document embedding
-    doc_embs, doc_model, device = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
-    print("Get doc embedding done.")
+    # Cross domain setting
+    if config["dataset2"]:
+        config["dataset"] = config["dataset2"]
+        unpreprocessed_corpus2, preprocessed_corpus2 = get_preprocess_document(**config)
+        preprocessed_corpus2 = preprocessed_corpus2
+        texts2 = [text.split() for text in preprocessed_corpus2]
 
-    label, vocabulary = get_preprocess_document_labels_v2(preprocessed_corpus, config, config['preprocess_config_dir'])
+        word2idx, idx2word, labels = get_document_labels(texts + texts2, max_len=config["max_len"])
+        doc_embs, doc_model, device = get_preprocess_document_embs(preprocessed_corpus + preprocessed_corpus2, config['encoder'])
+        print("Get doc embedding done.")
+        label, vocabulary = get_preprocess_document_labels_v2(preprocessed_corpus + preprocessed_corpus2, config, config['preprocess_config_dir'])
+        targets = label[config["target"]]
 
-    targets = label[config["target"]]
+        labels_2 = labels[len(texts):]
+        labels = labels[:len(texts)]
+
+        doc_embs_2 = doc_embs[len(texts):]
+        doc_embs = doc_embs[:len(texts)]
+
+        targets_2 = targets[len(texts):]
+        targets = targets[:len(texts)]
+
+        train_loader, valid_loader, _ = prepare_dataloader(doc_embs, labels, targets, batch_size=16, train_valid_test_ratio=[0.99, 0.01, 0])
+        test_loader, _, _ = prepare_dataloader(doc_embs_2, labels_2, targets_2, batch_size=16, train_valid_test_ratio=[0.99, 0.01, 0])
+    else:
+        word2idx, idx2word, labels = get_document_labels(texts, max_len=config["max_len"])
+        doc_embs, doc_model, device = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
+        print("Get doc embedding done.")
+        label, vocabulary = get_preprocess_document_labels_v2(preprocessed_corpus, config, config['preprocess_config_dir'])
+        targets = label[config["target"]]
+
+        train_loader, valid_loader, test_loader = prepare_dataloader(doc_embs, labels, targets, batch_size=32)
 
     target_word2idx = {}
     for idx, word in enumerate(vocabulary):
         target_word2idx[word] = idx
 
     word_embeddings = get_word_embs(vocabulary, data_type='tensor', word_emb_file='../../data/glove.6B.300d.txt')
+    print("Get wording embedding done.")
 
     vocabulary_size = len(word2idx)
     embedding_size = 512
-    hidden_size = 300
+    hidden_size = doc_embs.shape[1]
     num_layer = 1
     drop_out = 0
 
     print("doc_emb shape: {}".format(doc_embs.shape))
     print("voc size: {}".format(vocabulary_size))
     print("labels size: {}".format(labels.size()))
-
-    train_loader, valid_loader, test_loader = prepare_dataloader(doc_embs, labels, targets, batch_size=32)
 
     # We only need decoder part
     dec = Decoder(vocabulary_size, embedding_size, hidden_size, num_layer, drop_out)
