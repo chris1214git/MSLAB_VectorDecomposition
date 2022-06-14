@@ -277,6 +277,16 @@ if __name__ == '__main__':
     # Cross domain setting
     if config["dataset2"]:
         config["dataset"] = config["dataset2"]
+        print("dataset2:{}".format(config["dataset"]))
+        if config['dataset'] == '20news':
+            config["min_df"], config['max_df'], config['min_doc_word'] = 62, 1.0, 15
+        elif config['dataset'] == 'agnews':
+            config["min_df"], config['max_df'], config['min_doc_word'] = 425, 1.0, 15
+        elif config['dataset'] == 'IMDB':
+            config["min_df"], config['max_df'], config['min_doc_word'] = 166, 1.0, 15
+        elif config['dataset'] == 'wiki':
+            config["min_df"], config['max_df'], config['min_doc_word'] = 2872, 1.0, 15
+
         unpreprocessed_corpus2, preprocessed_corpus2 = get_preprocess_document(**config)
         preprocessed_corpus2 = preprocessed_corpus2
         texts2 = [text.split() for text in preprocessed_corpus2]
@@ -284,6 +294,7 @@ if __name__ == '__main__':
         word2idx, idx2word, labels = get_document_labels(texts + texts2, max_len=config["max_len"])
         doc_embs, doc_model, device = get_preprocess_document_embs(preprocessed_corpus + preprocessed_corpus2, config['encoder'])
         print("Get doc embedding done.")
+        
         label, vocabulary = get_preprocess_document_labels_v2(preprocessed_corpus + preprocessed_corpus2, config, config['preprocess_config_dir'])
         targets = label[config["target"]]
 
