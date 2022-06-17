@@ -18,31 +18,42 @@ torch.set_num_threads(8)
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='document decomposition.')
     parser.add_argument('--model', type=str, default="ZTM")
-    parser.add_argument('--dataset', type=str, default="20news")
-    parser.add_argument('--min_df', type=int, default=1)
-    parser.add_argument('--max_df', type=float, default=1.0)
-    parser.add_argument('--min_doc_word', type=int, default=15)
+    parser.add_argument('--dataset', type=str, default="wiki")
+    parser.add_argument('--target', type=str, default='tf-idf-gensim')
+    parser.add_argument('--max_len', type=int, default=30)
+    parser.add_argument('--topk', type=int, nargs='+', default=[5, 10, 15, 20, 25, 30, 35, 40, 45, 50])
+    parser.add_argument('--num_epoch', type=int, default=50)
     parser.add_argument('--min_doc_len', type=int, default=15)
-    parser.add_argument('--encoder', type=str, default='bert')
-    parser.add_argument('--target', type=str, default='tf-idf')
+    parser.add_argument('--preprocess_config_dir', type=str, default='parameters_baseline2')
+    parser.add_argument('--encoder', type=str, default='mpnet')
     parser.add_argument('--seed', type=int, default=123)
+    parser.add_argument('--threshold', type=float, default=0.5)
+    parser.add_argument('--dataset2', type=str, default=None)
     args = parser.parse_args()
-    
     config = vars(args)
-    config["dataset_name"] = config["dataset"]
+
+    if config['dataset'] == '20news':
+        config["min_df"], config['max_df'], config['min_doc_word'] = 62, 1.0, 15
+    elif config['dataset'] == 'agnews':
+        config["min_df"], config['max_df'], config['min_doc_word'] = 425, 1.0, 15
+    elif config['dataset'] == 'IMDB':
+        config["min_df"], config['max_df'], config['min_doc_word'] = 166, 1.0, 15
+    elif config['dataset'] == 'wiki':
+        config["min_df"], config['max_df'], config['min_doc_word'] = 2872, 1.0, 15
 
     show_settings(config)
-    record_settings(config)
     same_seeds(config["seed"])
-    
+
     # data preprocessing
     unpreprocessed_corpus, preprocessed_corpus = get_preprocess_document(**config)
+
+    # generating document embedding
+    doc_embs, doc_model, device = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
+    print("Get doc embedding done.")
+    
     texts = [text.split() for text in preprocessed_corpus]
     length = [len(text) for text in texts]
     print(texts[:3])
-
-    # generating document embedding
-    doc_embs, doc_model = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
 
     # Decode target & Vocabulary
     labels, vocabularys= get_preprocess_document_labels(preprocessed_corpus)

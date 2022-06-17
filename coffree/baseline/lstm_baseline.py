@@ -269,11 +269,6 @@ if __name__ == '__main__':
     # data preprocessing
     unpreprocessed_corpus, preprocessed_corpus = get_preprocess_document(**config)
 
-    preprocessed_corpus = preprocessed_corpus
-
-    texts = [text.split() for text in preprocessed_corpus]
-
-
     # Cross domain setting
     if config["dataset2"]:
         config["dataset"] = config["dataset2"]
@@ -288,15 +283,23 @@ if __name__ == '__main__':
             config["min_df"], config['max_df'], config['min_doc_word'] = 2872, 1.0, 15
 
         unpreprocessed_corpus2, preprocessed_corpus2 = get_preprocess_document(**config)
-        preprocessed_corpus2 = preprocessed_corpus2
+        doc_embs, doc_model, device = get_preprocess_document_embs(preprocessed_corpus + preprocessed_corpus2, config['encoder'])
+        print("Get doc embedding done.")
+
+        print("Dataset 1 size:{}".format(len(preprocessed_corpus)))
+        print("Dataset 2 size:{}".format(len(preprocessed_corpus2)))
+        print("Embedding size:{}".format(len(doc_embs)))
+
+        texts = [text.split() for text in preprocessed_corpus]
         texts2 = [text.split() for text in preprocessed_corpus2]
 
         word2idx, idx2word, labels = get_document_labels(texts + texts2, max_len=config["max_len"])
-        doc_embs, doc_model, device = get_preprocess_document_embs(preprocessed_corpus + preprocessed_corpus2, config['encoder'])
-        print("Get doc embedding done.")
         
         label, vocabulary = get_preprocess_document_labels_v2(preprocessed_corpus + preprocessed_corpus2, config, config['preprocess_config_dir'])
         targets = label[config["target"]]
+
+        print("Labels size:{}".format(len(labels)))
+        print("Targets size:{}".format(len(targets)))
 
         labels_2 = labels[len(texts):]
         labels = labels[:len(texts)]
@@ -310,9 +313,11 @@ if __name__ == '__main__':
         train_loader, valid_loader, _ = prepare_dataloader(doc_embs, labels, targets, batch_size=16, train_valid_test_ratio=[0.99, 0.01, 0])
         test_loader, _, _ = prepare_dataloader(doc_embs_2, labels_2, targets_2, batch_size=16, train_valid_test_ratio=[0.99, 0.01, 0])
     else:
-        word2idx, idx2word, labels = get_document_labels(texts, max_len=config["max_len"])
         doc_embs, doc_model, device = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
         print("Get doc embedding done.")
+
+        texts = [text.split() for text in preprocessed_corpus]
+        word2idx, idx2word, labels = get_document_labels(texts, max_len=config["max_len"])
         label, vocabulary = get_preprocess_document_labels_v2(preprocessed_corpus, config, config['preprocess_config_dir'])
         targets = label[config["target"]]
 
