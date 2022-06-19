@@ -1,4 +1,5 @@
-# Cross domain 
+# Cross domain
+mkdir -p record &&
 python lstm_baseline.py --encoder=mpnet --dataset=wiki --dataset2=20news | tee record/EXP_cross_20news.txt &&
 python lstm_baseline.py --encoder=mpnet --dataset=wiki --dataset2=IMDB | tee record/EXP_cross_IMDB.txt &&
 python lstm_baseline.py --encoder=mpnet --dataset=wiki --dataset2=agnews | tee record/EXP_cross_agnews.txt
