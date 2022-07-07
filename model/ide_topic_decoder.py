@@ -35,7 +35,7 @@ class IDEDataset(Dataset):
         return len(self.emb)
 
 class DecoderNetwork(nn.Module):
-    def __init__(self, config, device, vocab_size, contextual_size, glove_word_embeddings, n_components, hidden_sizes=(100,100), activation='softplus', dropout=0.2, learn_priors=True):
+    def __init__(self, config, device, vocab_size, contextual_size, glove_word_embeddings, n_components, hidden_sizes=(100,100), activation='relu', dropout=0.2, learn_priors=True):
         super(DecoderNetwork, self).__init__()
 
         assert activation in ['softplus', 'relu']
@@ -164,43 +164,44 @@ class DecoderNetwork(nn.Module):
         # in: batch_size x input_size x n_components
         word_dist = F.softmax(self.beta_batchnorm(torch.matmul(theta, self.beta)), dim=1)
         # word_dist: batch_size x input_size
+        word_dist_for_decoder = word_dist.detach()
         self.topic_word_matrix = self.beta
         if self.config['architecture'] == 'concatenate_word':
             if self.config['activation'] == 'tanh':
-                emb_word_dist = torch.cat((word_dist, emb), dim=1)
+                emb_word_dist = torch.cat((word_dist_for_decoder, emb), dim=1)
                 decoded_word_dist = self.half_decoder_tanh(emb_word_dist)
                 recon_dist = self.batch_norm((torch.matmul(decoded_word_dist, self.word_embedding)))
             else:
-                emb_word_dist = torch.cat((word_dist, emb), dim=1)
+                emb_word_dist = torch.cat((word_dist_for_decoder, emb), dim=1)
                 decoded_word_dist = self.half_decoder_sigmoid(emb_word_dist)
                 recon_dist = self.batch_norm((torch.matmul(decoded_word_dist, self.word_embedding)))
         elif self.config['architecture'] == 'concatenate':
             if self.config['activation'] == 'tanh':
-                emb_word_dist = torch.cat((word_dist, emb), dim=1)
+                emb_word_dist = torch.cat((word_dist_for_decoder, emb), dim=1)
                 decoded_word_dist = self.con_full_decoder_tanh(emb_word_dist)
                 recon_dist = decoded_word_dist
             else:
-                emb_word_dist = torch.cat((word_dist, emb), dim=1)
+                emb_word_dist = torch.cat((word_dist_for_decoder, emb), dim=1)
                 decoded_word_dist = self.con_full_decoder_sigmoid(emb_word_dist)
                 recon_dist = decoded_word_dist
         elif self.config['architecture'] == 'parallel':
             if self.config['activation'] == 'tanh':
                 emb_word_dist = self.para_full_decoder_tanh(emb)
-                decoded_word_dist = torch.cat((word_dist, emb_word_dist), dim=1)
+                decoded_word_dist = torch.cat((word_dist_for_decoder, emb_word_dist), dim=1)
                 recon_dist = self.compress(decoded_word_dist)
             else:
                 emb_word_dist = self.para_full_decoder_sigmoid(emb)
-                decoded_word_dist = torch.cat((word_dist, emb_word_dist), dim=1)
+                decoded_word_dist = torch.cat((word_dist_for_decoder, emb_word_dist), dim=1)
                 recon_dist = self.compress(decoded_word_dist)
         elif self.config['architecture'] == 'ratio_merge':
             if self.config['activation'] == 'tanh':
                 decoded_word_dist = self.para_full_decoder_tanh(emb)
-                recon_dist = 0.8 * decoded_word_dist + 0.2 * word_dist
+                recon_dist = 0.8 * decoded_word_dist + 0.2 * word_dist_for_decoder
             else:
                 decoded_word_dist = self.para_full_decoder_sigmoid(emb)
-                recon_dist = 0.8 * decoded_word_dist + 0.2 * word_dist
+                recon_dist = 0.8 * decoded_word_dist + 0.2 * word_dist_for_decoder
         else:
-            recon_dist = word_dist
+            recon_dist = word_dist_for_decoder
         return self.prior_mean, self.prior_variance, posterior_mu, posterior_sigma, posterior_log_sigma, word_dist, recon_dist
     
     def get_theta(self, target, emb, labels=None):
@@ -381,6 +382,42 @@ class IDETopicDecoder:
         val_loss /= samples_processed
 
         return samples_processed, val_loss, results, dists
+    
+    def validation2(self, loader):
+        """Validation epoch."""
+        self.model.eval()
+        val_loss = 0
+        samples_processed = 0
+
+        results = defaultdict(list)
+        dists = defaultdict(list)
+
+        for batch, (corpus, emb, target) in enumerate(loader):
+            target = target.reshape(target.shape[0], -1)
+            emb, target = emb.to(self.device), target.to(self.device)
+
+            self.model.zero_grad()
+            prior_mean, prior_variance, posterior_mean, posterior_variance,\
+            posterior_log_variance, word_dists, recon_dists = self.model(emb, target)
+            
+            for i in range(recon_dists.shape[0]):
+                r = recon_dists[i].view(1,-1)
+                t = target[i].view(1,-1)
+                # Precision for reconstruct
+                precision_scores = retrieval_precision_all(r, t, k=self.config['topk'])
+                for k, v in precision_scores.items():
+                    results['Precision@{}'.format(k)].append(v)
+                
+                precision_scores = retrieval_precision_all_v2(r, t, k=self.config['topk'])
+                for k, v in precision_scores.items():
+                    results['R-Precision@{}'.format(k)].append(v)
+
+                # NDCG for reconstruct
+                ndcg_scores = retrieval_normalized_dcg_all(r, t, k=self.config['topk'])
+                for k, v in ndcg_scores.items():
+                    results['NDCG@{}'.format(k)].append(v)
+            
+        return results
 
     def fit(self, training_set, validation_set, n_samples=20):
         self.model.to(self.device)
@@ -438,8 +475,8 @@ class IDETopicDecoder:
             pbar.set_description("Epoch: [{}/{}]\t Seen Samples: [{}/{}]\tTrain Loss: {}\tTime: {}".format(
                 epoch + 1, self.num_epochs, samples_processed,
                 len(training_set) * self.num_epochs, train_loss, e - s))
-        recon_df.to_csv('./'+self.config['experiment']+'_recon_'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['architecture']+'_'+self.config['activation']+'_'+self.config['encoder']+'_'+self.config['target']+'_loss_'+self.config['loss']+'_lr'+str(self.config['lr'])+'_batch'+str(self.config['batch_size'])+'_weightdecay'+str(self.config['weight_decay'])+'.csv', index=False)
-        dist_df.to_csv('./'+self.config['experiment']+'_dist_'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['architecture']+'_'+self.config['activation']+'_'+self.config['encoder']+'_'+self.config['target']+'_loss_'+self.config['loss']+'_lr'+str(self.config['lr'])+'_batch'+str(self.config['batch_size'])+'_weightdecay'+str(self.config['weight_decay'])+'.csv', index=False)
+        #recon_df.to_csv('./'+self.config['experiment']+'_recon_'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['architecture']+'_'+self.config['activation']+'_'+self.config['encoder']+'_'+self.config['target']+'_loss_'+self.config['loss']+'_lr'+str(self.config['lr'])+'_batch'+str(self.config['batch_size'])+'_weightdecay'+str(self.config['weight_decay'])+'.csv', index=False)
+        #dist_df.to_csv('./'+self.config['experiment']+'_dist_'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['architecture']+'_'+self.config['activation']+'_'+self.config['encoder']+'_'+self.config['target']+'_loss_'+self.config['loss']+'_lr'+str(self.config['lr'])+'_batch'+str(self.config['batch_size'])+'_weightdecay'+str(self.config['weight_decay'])+'.csv', index=False)
         pbar.close()
     
     def get_topic_lists(self, k=10):
@@ -458,3 +495,53 @@ class IDETopicDecoder:
                                for idx in idxs.cpu().numpy()]
             topics.append(component_words)
         return topics
+    def get_doc_topic_distribution(self, dataset, n_samples=20):
+        n_samples = self.n_components
+        if self.distribution_cache is not None:
+            return self.distribution_cache
+        self.model.eval()
+
+        loader = DataLoader(dataset, batch_size=self.config['batch_size'], shuffle=False, num_workers=self.num_data_loader_workers)
+        pbar = tqdm(n_samples, position=0, leave=True)
+        final_thetas = []
+        for sample_index in range(n_samples):
+            with torch.no_grad():
+                collect_theta = []
+
+                for batch, (corpus, emb, target) in enumerate(loader):
+                    # batch_size x vocab_size
+                    emb, target = emb.to(self.device), target.to(self.device)
+                    # forward pass
+                    self.model.zero_grad()
+                    collect_theta.extend(self.model.get_theta(target, emb).cpu().numpy().tolist())
+
+                pbar.update(1)
+                pbar.set_description("Sampling: [{}/{}]".format(sample_index + 1, n_samples))
+
+                final_thetas.append(np.array(collect_theta))
+        pbar.close()
+        self.distribution_cache = np.sum(final_thetas, axis=0) / n_samples
+        return self.distribution_cache
+        
+    def get_reconstruct(self, testing_set):
+        loader = DataLoader(testing_set, batch_size=self.config['batch_size'], shuffle=False, num_workers=self.num_data_loader_workers)
+        self.model.eval()
+        recon_lists = []
+        target_lists = []
+        documents_lists = ()
+        with torch.no_grad():
+            for batch, (corpus, emb, target) in enumerate(loader):     
+                target = target.reshape(target.shape[0], -1)
+                emb, target = emb.to(self.device), target.to(self.device)
+
+                self.model.zero_grad()
+                prior_mean, prior_variance, posterior_mean, posterior_variance,\
+                posterior_log_variance, word_dists, recon_dists = self.model(emb, target)
+                
+                kl_loss, rl_loss, dl_loss = self.loss(target, word_dists, recon_dists, prior_mean, prior_variance,
+                                posterior_mean, posterior_variance, posterior_log_variance)
+                recon_lists.append(recon_dists)
+                target_lists.append(target)
+                documents_lists = documents_lists + corpus
+
+        return torch.cat(recon_lists, dim=0).cpu().detach().numpy(), torch.cat(target_lists, dim=0).cpu().detach().numpy(), documents_lists

@@ -20,7 +20,7 @@ if __name__ =='__main__':
     parser = argparse.ArgumentParser(description='document decomposition.')
     parser.add_argument('--experiment', type=str, default="check")
     parser.add_argument('--model', type=str, default="ZTM")
-    parser.add_argument('--architecture', type=str, default="concatenate_word")
+    parser.add_argument('--architecture', type=str, default="concatenate")
     parser.add_argument('--activation', type=str, default="sigmoid")
     parser.add_argument('--dataset', type=str, default="20news")
     parser.add_argument('--dataset2', type=str, default=None)
@@ -44,7 +44,7 @@ if __name__ =='__main__':
     parser.add_argument('--semantic', type=bool, default=False)
     parser.add_argument('--save', type=bool, default=False)
     parser.add_argument('--threshold', type=float, default=0.5)
-    parser.add_argument('--check_document', type=bool, default=False)
+    parser.add_argument('--check_document', type=bool, default=True)
     parser.add_argument('--check_auto', type=bool, default=True)
     parser.add_argument('--check_nums', type=int, default=500)
     args = parser.parse_args()
@@ -76,13 +76,13 @@ if __name__ =='__main__':
         except:
             print('[Error] CUDA Memory Insufficient, retry after 15 secondes.')
             time.sleep(15)
-
+    # doc_embs, doc_model, device = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
     # Decode target & Vocabulary
     if config['target'] == 'keybert' or config['target'] == 'yake':
         labels, vocabularys= load_preprocess_document_labels(config)
         label = labels[config['target']].toarray()
-        if config['target'] == 'yake':
-            label = np.abs(label)
+        # if config['target'] == 'yake':
+        #     label = np.reciprocal(np.abs(label))
     else:
         labels, vocabularys= get_preprocess_document_labels(preprocessed_corpus)
         label = labels[config['target']]
@@ -148,7 +148,7 @@ if __name__ =='__main__':
         # Declare model & train
         while True:
             try:
-                model = IDETopicDecoder(config, texts=texts, vocab = new_vocabularys, idx2token=id2token, device=device, contextual_size=doc_embs.shape[1], word_embeddings=word_embeddings)
+                model = IDETopicDecoder(config, texts=texts, vocab = new_vocabularys, idx2token=id2token, device=device, contextual_size=doc_embs.shape[1], word_embeddings=word_embeddings, n_components=config['topic_num'])
                 model.fit(training_set, validation_set)
                 break
             except:
@@ -170,13 +170,83 @@ if __name__ =='__main__':
 
         while True:
             try:
-                model = IDETopicDecoder(config, texts=texts, vocab = vocabularys, idx2token=id2token, device=device, contextual_size=doc_embs.shape[1], word_embeddings=word_embeddings)
+                model = IDETopicDecoder(config, texts=texts, vocab = vocabularys, idx2token=id2token, device=device, contextual_size=doc_embs.shape[1], word_embeddings=word_embeddings, n_components=config['topic_num'])
                 model.fit(training_set, validation_set)
                 break
             except:
                 print('[Error] CUDA Memory Insufficient, retry after 15 secondes.')
                 time.sleep(15)
-        
+        # model = IDETopicDecoder(config, texts=texts, vocab = vocabularys, idx2token=id2token, device=device, contextual_size=doc_embs.shape[1], word_embeddings=word_embeddings)
+        # model.fit(training_set, validation_set)
+        if config['check_document']:
+            # doc_idx = []
+            # for idx in range(200):
+            #     doc_idx.append(random.randint(0, len(validation_set)-1))
+            # visualize documents
+            #for idx in doc_idx:
+            # get recontruct result
+            recon_list, target_list, doc_list = model.get_reconstruct(validation_set)
+            validation_loader = DataLoader(validation_set, batch_size=8, shuffle=False, num_workers=4)        
+            result = model.validation2(validation_loader)
+            # get ranking index
+            recon_rank_list = np.zeros((len(recon_list), len(vocabularys)), dtype='float32')
+            target_rank_list = np.zeros((len(recon_list), len(vocabularys)), dtype='float32')
+            for i in range(len(recon_list)):
+                recon_rank_list[i] = np.argsort(recon_list[i])[::-1]
+                target_rank_list[i] = np.argsort(target_list[i])[::-1]
+            doc_topics_distribution = model.get_doc_topic_distribution(validation_set)
+            topic_words = model.get_topic_lists(15)
+            record = open('./document_'+config['dataset']+'_'+config['model']+'_'+config['encoder']+'_'+config['target']+'_'+str(config['epochs'])+'_'+str(config['topic_num'])+'.txt', 'a')
+            record.write('Topics:\n')
+            for topic in topic_words:
+                record.write(f'{topic}\n')
+            print('---------------------------------------')
+                
+            for idx in range(1000):
+                if result['R-Precision@10'][idx] < 0.4:
+                    continue
+                # show info
+                # record = open('./document_'+config['dataset']+'_'+config['model']+'_'+config['encoder']+'_'+config['target']+'.txt', 'a')
+                # doc_topics_distribution = model.get_doc_topic_distribution(validation_set)
+                topk_topic = np.argsort(doc_topics_distribution[idx])[::-1][:3]
+                topk_topic_value = doc_topics_distribution[idx][topk_topic]
+                doc_topics = np.array(topic_words)[topk_topic]
+                # print('Documents ', idx)
+                record.write('Documents '+str(idx)+'\n')
+                # print(doc_list[idx])
+                record.write(doc_list[idx])
+                # print('---------------------------------------')
+                record.write('\n---------------------------------------\n')
+                # print('Topic of Document: ')
+                record.write('Topic of Document: \n')
+                # print(doc_topics)
+                record.write(f'topic1 value: {topk_topic_value[0]}\n')
+                record.write(str(doc_topics[0])+'\n')
+                record.write(f'topic2 value: {topk_topic_value[1]}\n')
+                record.write(str(doc_topics[1])+'\n')
+                record.write(f'topic3 value: {topk_topic_value[2]}\n')
+                record.write(str(doc_topics[2])+'\n')
+                # print('---------------------------------------')
+                record.write('---------------------------------------\n')
+                # print('[Predict] Top 10 Words in Document: ')
+                record.write('[Predict] Top 10 Words in Document: \n')
+                for word_idx in range(15):
+                    # print(id2token[recon_rank_list[idx][word_idx]])
+                    record.write(str(id2token[recon_rank_list[idx][word_idx]])+'\n')
+                # print('---------------------------------------')
+                record.write('---------------------------------------\n')
+                # print('[Label] Top 10 Words in Document: ')
+                record.write('[Label] Top 10 Words in Document: \n')
+                for word_idx in range(15):
+                    # print(id2token[target_rank_list[idx][word_idx]])
+                    record.write(str(id2token[target_rank_list[idx][word_idx]])+'\n')
 
-    
-    
+                record.write('---------------------------------------\n')
+                record.write('Precision:'+str(result['Precision@10'][idx])+'\n')
+                record.write('R-Precision:'+str(result['R-Precision@10'][idx])+'\n')
+                record.write('NDCG:'+str(result['NDCG@10'][idx])+'\n')                    
+                # print('---------------------------------------\n')
+                record.write('---------------------------------------\n\n')
+
+        
+        

@@ -374,7 +374,45 @@ def get_preprocess_document_labels_v2(preprocessed_docs, preprocess_config, prep
     labels['tf-idf-gensim'] = new_gensim_tf_idf_vector
     
     return labels, vocabulary
+
+def get_preprocess_document_labels_gensim_dct(preprocessed_docs, preprocess_config='../chris/parameters/preprocess_config.json'):
+    '''
+    Returns labels for document decoder
+
+            Parameters:
+                    preprocessed_docs (list): 
+            Returns:
+                    labels (dict): bow, tf-idf
+                    vocabulary (dict): bow, tf-idf
+    '''
+    print('Getting preprocess documents labels')
+    vectorizer = TfidfVectorizer()
+    # covert sparse matrix to numpy array
+    sklearn_tf_idf_vector = vectorizer.fit_transform(preprocessed_docs).toarray()
+    docs = [doc.split() for doc in preprocessed_docs]
+    gensim_dct = Dictionary(docs)
+    gensim_corpus = [gensim_dct.doc2bow(doc) for doc in docs]
+    model = TfidfModel(gensim_corpus, normalize=False)
+    gensim_vector = model[gensim_corpus]
+    gensim_tf_idf_vector = corpus2dense(gensim_vector, num_terms=len(gensim_dct.keys()), num_docs=gensim_dct.num_docs)
+    gensim_tf_idf_vector = np.array(gensim_tf_idf_vector).T.tolist()
+    bow_vector = sklearn_tf_idf_vector.copy()
+    bow_vector[bow_vector > 0] = 1
+    bow_vector[bow_vector < 0] = 0
+    vocabulary = vectorizer.get_feature_names()
+
+    labels = {}
+    labels['tf-idf'] = sklearn_tf_idf_vector
+    labels['tf-idf-gensim'] = np.array(gensim_tf_idf_vector)
+    labels['bow'] = bow_vector
     
+    vocabularys = {}
+    vocabularys['tf-idf'] = vocabulary
+    vocabularys['tf-idf-gensim'] = list(zip(*gensim_dct.items()))[1]
+    vocabularys['bow'] = vocabulary
+
+    return labels, vocabularys, gensim_dct
+
 def merge_targets(targets, targets2, vocabularys, vocabularys2):
     # ref: https://numpy.org/doc/stable/reference/generated/numpy.put_along_axis.html#numpy.put_along_axis
     vocabularys_all = list(vocabularys)
@@ -471,3 +509,4 @@ def get_word_embs(vocabularys, id2token=None, word_emb_file='../data/glove.6B.30
         print('Getting [ndarray] word embeddings')
         word_embs = np.array(word_embs)
     return word_embs
+    

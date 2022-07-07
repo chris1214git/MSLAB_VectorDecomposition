@@ -63,12 +63,12 @@ def mean_evaluate(config, preds, labels, vocabulary, word_embeddings):
         pred = torch.Tensor(preds)
         y = torch.Tensor(labels)
     # Semantic Prcision
-    precision_scores, word_result = semantic_precision_all(pred, y, word_embeddings, vocabulary, k=config['topk'], th=config['threshold'])
-    for k, v in precision_scores.items():
-        results['Semantic Precision v1@{}'.format(k)].append(v)
-    precision_scores, word_result = semantic_precision_all_v2(pred, y, word_embeddings, vocabulary, k=config['topk'], th=config['threshold'])
-    for k, v in precision_scores.items():
-        results['Semantic Precision_v2@{}'.format(k)].append(v)
+    # precision_scores, word_result = semantic_precision_all(pred, y, word_embeddings, vocabulary, k=config['topk'], th=config['threshold'])
+    # for k, v in precision_scores.items():
+    #     results['Semantic Precision v1@{}'.format(k)].append(v)
+    # precision_scores, word_result = semantic_precision_all_v2(pred, y, word_embeddings, vocabulary, k=config['topk'], th=config['threshold'])
+    # for k, v in precision_scores.items():
+    #     results['Semantic Precision_v2@{}'.format(k)].append(v)
 
     # Precision
     precision_scores = retrieval_precision_all(pred, y, k=config["topk"])
@@ -99,9 +99,9 @@ if __name__ =='__main__':
     parser.add_argument('--vocab_size', type=int, default=0)
     parser.add_argument('--min_doc_word', type=int, default=15)
     parser.add_argument('--encoder', type=str, default='mpnet')
-    parser.add_argument('--target', type=str, default='tf-idf')
+    parser.add_argument('--target', type=str, default='tf-idf-gensim')
     parser.add_argument('--seed', type=int, default=123)
-    parser.add_argument('--topk', type=int, nargs='+', default=[5, 10, 15])
+    parser.add_argument('--topk', type=int, nargs='+', default=[5, 10, 15, 20, 25, 30, 35, 40, 45, 50])
     parser.add_argument('--threshold', type=float, default=0.5)
     parser.add_argument('--n_neighbors', type=int, default=20)
     args = parser.parse_args()

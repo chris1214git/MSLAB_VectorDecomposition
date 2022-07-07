@@ -57,7 +57,7 @@ if not config['crossdomain']:
             dataset, seed = parameters
             cmd = f"python3 ide_topic.py --experiment {config['experiment']+str(int(ratio*100))+'_'+str(seed)} --dataset {dataset} --architecture {architecture} --encoder {encoder} --target {target} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size} --epochs {300} --seed {seed}"
             os.system(cmd)
-    elif config['experiment'] == 'p_value_target':
+    elif config['experiment'] == 'p_value_target_20news':
         print('[p-value] Fix 20news & mpnet')
         dataset = '20news'
         encoder = 'mpnet'
@@ -68,6 +68,42 @@ if not config['crossdomain']:
         weight_decay = 0
         seed_list = [123, 234, 345, 456, 567, 678, 789, 890, 910, 911]
         ratio = 0.5
+
+        comb = list(product(target_list, seed_list))
+        for parameters in comb:
+            target, seed = parameters
+            cmd = f"python3 ide_topic.py --experiment {config['experiment']+str(int(ratio*100))+'_'+str(seed)} --dataset {dataset} --architecture {architecture} --encoder {encoder} --target {target} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size} --epochs {300} --seed {seed}"
+            os.system(cmd)
+    
+    elif config['experiment'] == 'p_value_target_agnews':
+        print('[p-value] Fix agnews & mpnet')
+        dataset = 'agnews'
+        encoder = 'mpnet'
+        architecture = 'concatenate'
+        target_list = ['keybert', 'yake']
+        batch_size = 16
+        lr = 2e-3
+        weight_decay = 0
+        seed_list = [123, 234, 345, 456, 567, 678, 789, 890, 910, 911]
+        ratio = 0.8
+
+        comb = list(product(target_list, seed_list))
+        for parameters in comb:
+            target, seed = parameters
+            cmd = f"python3 ide_topic.py --experiment {config['experiment']+str(int(ratio*100))+'_'+str(seed)} --dataset {dataset} --architecture {architecture} --encoder {encoder} --target {target} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size} --epochs {300} --seed {seed}"
+            os.system(cmd)
+
+    elif config['experiment'] == 'p_value_target_IMDB':
+        print('[p-value] Fix IMDB & mpnet')
+        dataset = 'IMDB'
+        encoder = 'mpnet'
+        architecture = 'concatenate'
+        target_list = ['keybert', 'yake']
+        batch_size = 16
+        lr = 2e-3
+        weight_decay = 0
+        seed_list = [123, 234, 345, 456, 567, 678, 789, 890, 910, 911]
+        ratio = 0.8
 
         comb = list(product(target_list, seed_list))
         for parameters in comb:
@@ -90,7 +126,25 @@ if not config['crossdomain']:
         comb = list(product(encoder_list, seed_list, ratio_list))
         for parameters in comb:
             encoder, seed, ratio = parameters
-            cmd = f"python3 ide_topic.py --experiment {config['experiment']+str(int(ratio*100))+'_'+str(seed)} --dataset {dataset} --architecture {architecture} --encoder {encoder} --target {target} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size} --epochs {300} --seed {seed} --ratio {ratio}"
+            cmd = f"python3 ide_topic.py --experiment {config['experiment']+str(int(ratio*100))+'_'+str(seed)} --dataset {dataset} --architecture {architecture} --encoder {encoder} --target {target} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size} --epochs {250} --seed {seed} --ratio {ratio}"
+            os.system(cmd)
+
+    elif config['experiment'] == 'visualize':
+        print('[p-value] Generate Document')
+        dataset_list = ['20news', 'agnews', 'IMDB']
+        encoder = 'mpnet'
+        architecture = 'concatenate'
+        target_list = ['yake', 'keybert', 'tf-idf-gensim']
+        batch_size = 16
+        lr = 2e-3
+        weight_decay = 0
+        seed = 123
+        ratio = 0.8
+
+        comb = list(product(dataset_list, target_list))
+        for parameters in comb:
+            dataset, target = parameters
+            cmd = f"python3 ide_topic.py --experiment {config['experiment']+str(int(ratio*100))+'_'+str(seed)} --dataset {dataset} --architecture {architecture} --encoder {encoder} --target {target} --lr {lr} --weight_decay {weight_decay} --batch_size {batch_size} --epochs {50} --seed {seed} --ratio {ratio} --check_document {True}"
             os.system(cmd)
 
     else:
