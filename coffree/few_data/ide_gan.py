@@ -17,7 +17,7 @@ from utils.toolbox import same_seeds, show_settings, record_settings, get_prepro
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 torch.set_num_threads(15)
 
-def generate_dataset(config):    
+def generate_dataset(config):
     # Data preprocessing
     unpreprocessed_corpus ,preprocessed_corpus = get_preprocess_document(**config)
     texts = [text.split() for text in preprocessed_corpus]
@@ -155,7 +155,7 @@ if __name__ =='__main__':
     if config['model'] == 'IDE_BERT_GAN':
         training_set, validation_set, vocabularys, id2token, gensim_dct, device = generate_dataset(config)
         model = IDEBERTGanDecoder(config, training_set, validation_set, vocabularys, id2token, gensim_dct, device)
-    else:
+    elif config['model'] == 'IDE_GAN':
         training_set, validation_set, vocabularys, id2token, device = generate_dataset(config)
         model = IDEGanDecoder(config, training_set, validation_set, vocabularys, id2token, device)
     model.fit()
