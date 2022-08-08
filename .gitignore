@@ -13,3 +13,4 @@ test.py
 *.png
 aclImdb
 *.txt
+.vscode
