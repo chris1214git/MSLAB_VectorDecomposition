@@ -3,6 +3,7 @@ data/glove*
 data/LIDE_wordemb
 data/docvector.txt
 data/wiki*
+data/parameters_baseline2*
 data/precompute_keyword*
 .ipynb_checkpoints/
 __pycache__
