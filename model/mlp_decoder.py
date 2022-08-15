@@ -2,7 +2,6 @@ import random
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch_geometric.transforms as T
 import numpy as np
 from collections import defaultdict
 from torch.utils.data import Dataset, DataLoader
