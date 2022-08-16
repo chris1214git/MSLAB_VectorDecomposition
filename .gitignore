@@ -14,3 +14,4 @@ test.py
 aclImdb
 *.txt
 .vscode
+baseline_collect/
