@@ -152,8 +152,47 @@ def get_preprocess_document_labels_v2(preprocessed_corpus, config, preprocess_co
     labels['bow'] = bow_vector.toarray()
     labels['keybert'] = keybert_vector.toarray()
     labels['yake'] = yake_vector.toarray()
+    
+    # New Part
+    word2idx = {"<SOS>": 0, "<EOS>": 1, "<PAD>": 2, "<UNK>" : 3}
+    idx2word = {0 : "<SOS>", 1 : "<EOS", 2 : "<PAD>", 3 : "<UNK>"}
+    # Build dictionary
+    for text in docs:
+        for word in text:
+            if (word2idx.get(word, -1) == -1):
+                idx2word[len(word2idx)] = word
+                word2idx[word] = len(word2idx)
+    
+    # Build labels
+    # 把句子裡面的字轉成相對應的 index
+    # important_idx = np.argsort(labels['tf-idf'], axis=1)[::-1]
+    important_idx = np.argsort(labels[config["target"]], axis=1)
 
-    return labels, vocabulary
+    sentence_list = []
+    num_words = len(important_idx[0])
+    for i, sen in enumerate(docs):
+        sentence_idx = [word2idx["<SOS>"]]
+        for idx in range(num_words-1, num_words - config["max_len"], -1):
+            word = vocabulary[important_idx[i][idx]]
+            if (word in word2idx.keys()):
+                sentence_idx.append(word2idx[word])
+            else:
+                sentence_idx.append(word2idx["<UNK>"])
+
+        # for word in sen:
+        #     if (word in word2idx.keys()):
+        #         sentence_idx.append(word2idx[word])
+        #     else:
+        #         sentence_idx.append(word2idx["<UNK>"])
+        # 將每個句子變成一樣的長度
+        sentence_idx = pad_sequence(sentence_idx, word2idx, config["max_len"])
+        sentence_idx[-1] = word2idx["<EOS>"]
+        sentence_list.append(sentence_idx)
+
+    lstm_label = torch.LongTensor(sentence_list)
+    # End of new part
+
+    return word2idx, idx2word, lstm_label, labels, vocabulary
 
 
 def train(model, iterator, optimizer, criterion, clip):
@@ -316,9 +355,9 @@ if __name__ == '__main__':
         doc_embs, doc_model, device = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
         print("Get doc embedding done.")
 
-        texts = [text.split() for text in preprocessed_corpus]
-        word2idx, idx2word, labels = get_document_labels(texts, max_len=config["max_len"])
-        label, vocabulary = get_preprocess_document_labels_v2(preprocessed_corpus, config, config['preprocess_config_dir'])
+        # texts = [text.split() for text in preprocessed_corpus]
+        # word2idx, idx2word, labels = get_document_labels(texts, max_len=config["max_len"])
+        word2idx, idx2word, labels, label, vocabulary = get_preprocess_document_labels_v2(preprocessed_corpus, config, config['preprocess_config_dir'])
         targets = label[config["target"]]
 
         train_loader, valid_loader, test_loader = prepare_dataloader(doc_embs, labels, targets, batch_size=32)
