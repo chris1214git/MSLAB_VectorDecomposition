@@ -27,11 +27,11 @@ if __name__ =='__main__':
     parser.add_argument('--min_doc_word', type=int, default=15)
     parser.add_argument('--encoder', type=str, default='mpnet')
     parser.add_argument('--target', type=str, default='tf-idf')
-    parser.add_argument('--epochs', type=int, default=500)
+    parser.add_argument('--epochs', type=int, default=200)
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--loss', type=str, default='listnet')
-    parser.add_argument('--ratio', type=float, default=0.8) # Training size
+    parser.add_argument('--ratio', type=float, default=0.2) # Training size
     parser.add_argument('--seed', type=int, default=123)
     parser.add_argument('--topk', type=int, nargs='+', default=[5, 10, 15])
     parser.add_argument('--threshold', type=float, default=0.5)
