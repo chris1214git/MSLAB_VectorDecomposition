@@ -150,9 +150,9 @@ class VariationalAE(nn.Module):
         eps = torch.randn_like(std)
         return eps.mul(std).add_(mu)
 
-    def forward(self, emb, target, labels=None):
+    def forward(self, emb, target=None, labels=None):
         """Forward pass."""
-        posterior_mu, posterior_log_sigma = self.inf_net(target, emb, labels)
+        posterior_mu, posterior_log_sigma = self.inf_net(emb, emb, labels)
         posterior_sigma = torch.exp(posterior_log_sigma)
 
         # generate samples from theta
@@ -168,7 +168,7 @@ class VariationalAE(nn.Module):
         
         # decode
         recon = self.decoder(word_dist);
-        return self.prior_mean, self.prior_variance, posterior_mu, posterior_sigma, posterior_log_sigma, word_dist, recon
+        return word_dist, recon
     
     def get_theta(self, target, emb, labels=None):
         with torch.no_grad():
@@ -177,6 +177,30 @@ class VariationalAE(nn.Module):
 
             return theta
 
+class AutoEncoder(nn.Module):
+  def __init__(self, input_size, encoded_size):
+    super().__init__()
+    self.input_size = input_size
+    self.encoded_size = encoded_size
+    self.encoder = nn.Sequential(
+        nn.Linear(input_size, 1024),
+        nn.BatchNorm1d(1024),
+        nn.Tanh(),
+        nn.Linear(1024, encoded_size),
+        nn.BatchNorm1d(encoded_size),
+    )
+    self.decoder = nn.Sequential(
+        nn.Linear(encoded_size, 1024),
+        nn.BatchNorm1d(1024),
+        nn.Tanh(),
+        nn.Linear(1024, input_size),
+        nn.BatchNorm1d(input_size),
+    )
+  
+  def forward(self, x):
+    encoded = self.encoder(x)
+    decoded = self.decoder(encoded)
+    return encoded, decoded
 
 class IDEAEDecoder:
     def __init__(self, config, train_set, valid_set, vocab = None, id2token=None, device=None, contextual_dim=768, encoded_dim=768, noise_dim=100, word_embeddings=None, dropout=0.2, momentum=0.99, num_data_loader_workers=mp.cpu_count(), loss_weights=None, eps=1e-8):
@@ -200,7 +224,10 @@ class IDEAEDecoder:
         self.mse_loss = torch.nn.MSELoss(reduction='none')
 
         # model
-        self.vae = VariationalAE(config, device, len(vocab), contextual_dim, encoded_dim, 50, (100, 100), 'relu', 0.2, True)
+        if config['ae'] == 'vae':
+            self.ae = VariationalAE(config, device, len(vocab), contextual_dim, encoded_dim, 50, (100, 100), 'relu', 0.2, True)
+        else:
+            self.ae = AutoEncoder(contextual_dim, encoded_dim)
         self.decoder = MLPDecoder(encoded_dim, len(vocab), 0.2)
         self.generator = Generator(device)
         self.discriminator = Discriminator(input_dim=contextual_dim, output_dim=len(vocab), dropout=dropout)
@@ -208,13 +235,13 @@ class IDEAEDecoder:
         
         # optimizer
         if config['optim'] == 'AdamW':
-            self.vae_optimizer = AdamW(self.vae.parameters(), lr=config['ae_lr'], eps=eps)
+            self.ae_optimizer = AdamW(self.ae.parameters(), lr=config['ae_lr'], eps=eps)
             self.decoder_optimizer = AdamW(self.decoder.parameters(), lr=config['lr'], eps=eps)
             self.gen_optimizer = AdamW(self.generator.parameters(), lr=config['lr'], eps=eps)
             self.dis_optimizer = AdamW(self.discriminator.parameters(), lr=config['lr'], eps=eps)
             self.cls_optimizer = AdamW(self.classifier.parameters(), lr=config['lr'], eps=eps)
         else:
-            self.vae_optimizer = torch.optim.Adam(self.vae.parameters(), lr=config['ae_lr'], betas=(self.momentum, 0.99), weight_decay=config['weight_decay'])
+            self.ae_optimizer = torch.optim.Adam(self.ae.parameters(), lr=config['ae_lr'], betas=(self.momentum, 0.99), weight_decay=config['weight_decay'])
             self.decoder_optimizer = torch.optim.Adam(self.decoder.parameters(), lr=config['lr'], betas=(self.momentum, 0.99), weight_decay=config['weight_decay'])
             self.gen_optimizer = torch.optim.Adam(self.generator.parameters(), lr=config['lr'], betas=(self.momentum, 0.99), weight_decay=config['weight_decay'])
             self.dis_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=config['lr'], betas=(self.momentum, 0.99), weight_decay=config['weight_decay'])
@@ -224,19 +251,19 @@ class IDEAEDecoder:
         if config['scheduler']:
             num_training_steps = int(len(train_set) / config['batch_size'] * config['epochs'])
             num_warmup_steps = int(num_training_steps * config['warmup_proportion'])
-            self.vae_optimizer = AdamW(self.vae.parameters(), lr=config['ae_lr'], eps=eps)
+            self.ae_optimizer = AdamW(self.ae.parameters(), lr=config['ae_lr'], eps=eps)
             self.decoder_optimizer = AdamW(self.decoder.parameters(), lr=config['lr'], eps=eps)
             self.gen_optimizer = AdamW(self.generator.parameters(), lr=config['lr'], eps=eps)
             self.dis_optimizer = AdamW(self.discriminator.parameters(), lr=config['lr'], eps=eps)
             self.cls_optimizer = AdamW(self.classifier.parameters(), lr=config['lr'], eps=eps)
             if config['warmup'] == 'linear':
-                self.vae_scheduler = get_linear_schedule_with_warmup(self.vae_optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps)
+                self.ae_scheduler = get_linear_schedule_with_warmup(self.ae_optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps)
                 self.decoder_scheduler = get_linear_schedule_with_warmup(self.decoder_optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps)
                 self.gen_scheduler = get_linear_schedule_with_warmup(self.gen_optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps)
                 self.dis_scheduler = get_linear_schedule_with_warmup(self.dis_optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps)
                 self.cls_scheduler = get_linear_schedule_with_warmup(self.cls_optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps)
             else:
-                self.vae_scheduler = get_constant_schedule_with_warmup(self.vae_optimizer, num_warmup_steps=num_warmup_steps)
+                self.ae_scheduler = get_constant_schedule_with_warmup(self.ae_optimizer, num_warmup_steps=num_warmup_steps)
                 self.decoder_scheduler = get_constant_schedule_with_warmup(self.decoder_optimizer, num_warmup_steps=num_warmup_steps)
                 self.gen_scheduler = get_constant_schedule_with_warmup(self.gen_optimizer, num_warmup_steps=num_warmup_steps)
                 self.dis_scheduler = get_constant_schedule_with_warmup(self.dis_optimizer, num_warmup_steps=num_warmup_steps)
@@ -250,25 +277,26 @@ class IDEAEDecoder:
         ae_train_loss = 0
         ae_train_cos = 0
         
-        self.vae.train()
+        self.ae.train()
 
         for batch, (corpus, embs, labels, masks) in enumerate(loader):
             embs, masks = embs.to(self.device), masks.to(self.device)
-            _, _, _, _, _, encoded, decoded = self.vae(embs, embs)
+            encoded, decoded = self.ae(embs)
             
             # Loss weight
             cos = torch.nn.functional.cosine_similarity(torch.mean(embs, dim=0), torch.mean(decoded, dim=0), dim=0)
-            # w = 1 - cos
+            w = 1 - cos
             
             # Encode-Decode's Loss
             recon_loss = torch.mean(self.mse_loss(decoded, embs), dim=1)
             mask_loss = torch.masked_select(recon_loss, torch.flatten(~masks))     
             decoded_loss = torch.mean(mask_loss)
-            print(decoded_loss)
                        
-            self.vae_optimizer.zero_grad()
+            self.ae_optimizer.zero_grad()
             decoded_loss.backward() 
-            self.vae_optimizer.step()
+            self.ae_optimizer.step()
+            if self.config['scheduler']:
+                self.ae_scheduler.step()
 
             ae_train_loss += decoded_loss.item()
             ae_train_cos += cos
@@ -290,14 +318,15 @@ class IDEAEDecoder:
 
         decode_train_loss = 0
 
-        self.vae.eval()
+        # self.ae.eval()
         self.decoder.train()
 
         for batch, (corpus, embs, labels, masks) in enumerate(loader):
             embs, labels, masks = embs.to(self.device), labels.to(self.device), masks.to(self.device)
 
-            # VAE transform
-            _, _, _, _, _, encoded, _ = self.vae(embs, embs)   
+            # AE transform
+            # encoded, _ = self.ae(embs)  
+            encoded = embs 
             
             # Decode
             recons = self.decoder(encoded)
@@ -313,6 +342,9 @@ class IDEAEDecoder:
             self.decoder_optimizer.zero_grad()
             decoded_loss.backward() 
             self.decoder_optimizer.step()
+
+            if self.config['scheduler']:
+                self.decoder_scheduler.step()
 
             decode_train_loss += decoded_loss.item()
 
@@ -330,7 +362,7 @@ class IDEAEDecoder:
         
         gen_train_loss = 0
         
-        #self.vae.train()
+        # self.ae.eval()
         self.generator.train()
         self.discriminator.eval()
         self.classifier.eval()
@@ -339,8 +371,8 @@ class IDEAEDecoder:
             real_embs, labels, masks = embs.to(self.device), labels.to(self.device), masks.to(self.device)
             cur_batch_size = embs.shape[0]
             
-            # vae transform
-            #real_embs_t = self.vae(real_embs)
+            # ae transform
+            # real_embs_t, _ = self.ae(real_embs)
             real_embs_t = real_embs
             
             # fake label from BERT
@@ -372,7 +404,8 @@ class IDEAEDecoder:
 
             # Generator's LOSS
             g_loss_d = -1 * torch.mean(torch.log(1 - D_fake_probs[:,-1] + self.eps))
-            g_feat_emb = torch.mean(torch.pow(torch.mean(real_embs_t, dim=0) - torch.mean(fake_embs, dim=0), 2))
+            # g_feat_emb = torch.mean(torch.pow(torch.mean(real_embs_t, dim=0) - torch.mean(fake_embs, dim=0), 2))
+            g_feat_emb = torch.mean(torch.mean(torch.cdist(fake_embs, real_embs_t, p=2), dim=0), dim=0).squeeze()
             gen_loss = g_loss_d + g_feat_emb
             
 
@@ -394,7 +427,7 @@ class IDEAEDecoder:
     def dis_training(self, epoch, loader):      
         cls_train_loss, dis_train_loss = 0, 0
         
-        #self.vae.train()
+        # self.ae.train()
         self.generator.eval()
         self.discriminator.train()
         self.classifier.train()
@@ -403,8 +436,8 @@ class IDEAEDecoder:
             real_embs, labels, masks = embs.to(self.device), labels.to(self.device), masks.to(self.device)
             cur_batch_size = embs.shape[0]
             
-            # vae transform
-            #real_embs_t = self.vae(real_embs)
+            # ae transform
+            # real_embs_t, _ = self.ae(real_embs)
             real_embs_t = real_embs
             
             # fake label from BERT
@@ -460,10 +493,13 @@ class IDEAEDecoder:
                 self.cls_scheduler.step()
                 
             self.dis_optimizer.zero_grad()
+            # self.ae_optimizer.zero_grad()
             dis_loss.backward()
             self.dis_optimizer.step()
+            # self.ae_optimizer.step()
             if self.config['scheduler']:
                 self.dis_scheduler.step()
+                # self.ae_scheduler.step()
             
             cls_train_loss += cls_loss.item()
             dis_train_loss += dis_loss.item()
@@ -480,13 +516,12 @@ class IDEAEDecoder:
         ae_val_loss = 0
         ae_val_cos = 0
         
-        self.vae.eval()
+        self.ae.eval()
         
         with torch.no_grad():
             for batch, (corpus, embs, labels, masks) in enumerate(loader):
                 embs, masks = embs.to(self.device), masks.to(self.device)
-                prior_mean, prior_variance, posterior_mean, posterior_variance,\
-                posterior_log_variance, encoded, decoded = self.vae(embs, embs)
+                encoded, decoded = self.ae(embs)
 
                 # Loss weight
                 cos = torch.nn.functional.cosine_similarity(torch.mean(embs, dim=0), torch.mean(decoded, dim=0), dim=0)
@@ -494,7 +529,7 @@ class IDEAEDecoder:
                 
                 # Encode-Decode's Loss
                 recon_loss = torch.mean(self.mse_loss(decoded, embs), dim=1)    
-                decoded_loss = torch.mean(recon_loss) * w
+                decoded_loss = torch.mean(recon_loss)
 
                 ae_val_loss += decoded_loss.item()
                 ae_val_cos += cos
@@ -505,7 +540,7 @@ class IDEAEDecoder:
         return avg_ae_val_loss, avg_ae_val_cos
     
     def mlp_validation(self, loader):
-        self.vae.eval()
+        # self.ae.eval()
         self.decoder.eval()
         
         results = defaultdict(list)
@@ -514,7 +549,8 @@ class IDEAEDecoder:
                 embs, labels = embs.to(self.device), labels.to(self.device)
                 
                 # VAE transform
-                _, _, _, _, _, encoded, _ = self.vae(embs, embs)   
+                # encoded, _ = self.ae(embs)  
+                encoded = embs 
 
                 # Decode
                 recons = self.decoder(encoded)
@@ -539,7 +575,7 @@ class IDEAEDecoder:
         return results
     
     def gan_validation(self, loader):
-        self.vae.eval()
+        # self.ae.eval()
         self.generator.eval()
         self.classifier.eval()
         self.discriminator.eval()
@@ -548,7 +584,8 @@ class IDEAEDecoder:
         with torch.no_grad():
             for batch, (corpus, embs, labels, masks) in enumerate(loader):
                 embs, labels = embs.to(self.device), labels.to(self.device)
-                #embs_t = self.vae(embs, embs)
+
+                # embs_t, _ = self.ae(embs)
                 embs_t = embs
                 
                 logits, probs = self.classifier(embs_t)
@@ -574,7 +611,7 @@ class IDEAEDecoder:
         return results
     
     def ae_fit(self):
-        self.vae.to(self.device)
+        self.ae.to(self.device)
 
         train_loader = DataLoader(self.train_set, batch_size=self.config['batch_size'], shuffle=True, num_workers=self.num_data_loader_workers)
         valid_loader = DataLoader(self.valid_set, batch_size=self.config['batch_size'], shuffle=False, num_workers=self.num_data_loader_workers)
@@ -618,6 +655,7 @@ class IDEAEDecoder:
                 record.write("Decoder training loss: {0:.3f}\n".format(decoded_train_loss))
 
     def gan_fit(self):
+        # self.ae.to(self.device)
         self.generator.to(self.device)
         self.classifier.to(self.device)
         self.discriminator.to(self.device)

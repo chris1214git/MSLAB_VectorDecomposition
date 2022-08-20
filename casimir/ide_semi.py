@@ -97,7 +97,7 @@ if __name__ =='__main__':
     parser = argparse.ArgumentParser(description='document decomposition.')
     parser.add_argument('--experiment', type=str, default="check")
     parser.add_argument('--model', type=str, default="IDE_GAN")
-    parser.add_argument('--ae', type=str, default='ae')
+    parser.add_argument('--ae', type=str, default='no')
     parser.add_argument('--architecture', type=str, default="concatenate")
     parser.add_argument('--activation', type=str, default="sigmoid")
     parser.add_argument('--dataset', type=str, default="20news")
@@ -148,7 +148,8 @@ if __name__ =='__main__':
     # Generate dataset
     training_set, validation_set, vocabularys, id2token, device = generate_dataset(config)
     model = IDEAEDecoder(config, training_set, validation_set, vocabularys, id2token, device)
-    #model.ae_fit()
+    if config['ae'] !='no':
+        model.ae_fit()
     if config['model'] == 'mlp':
         model.mlp_fit()
     else:
