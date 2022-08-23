@@ -26,7 +26,7 @@ if __name__ =='__main__':
     parser.add_argument('--vocab_size', type=int, default=0)
     parser.add_argument('--min_doc_word', type=int, default=15)
     parser.add_argument('--encoder', type=str, default='mpnet')
-    parser.add_argument('--target', type=str, default='tf-idf')
+    parser.add_argument('--target', type=str, default='tf-idf-gensim')
     parser.add_argument('--epochs', type=int, default=300)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--lr', type=float, default=1e-3)
