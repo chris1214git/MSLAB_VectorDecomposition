@@ -3,6 +3,7 @@ from cProfile import label
 import enum
 from json import load
 import random
+from tkinter.tix import Tree
 from turtle import forward
 import torch
 import torch.nn as nn
@@ -203,8 +204,18 @@ class AttackNetwork():
         validation_length = len(dataset) - training_length
         training_set, validation_set = random_split(dataset, lengths=[training_length, validation_length],generator=torch.Generator().manual_seed(42))
 
+        if self.config["inductive"]:
+            # Inductive
+            val_length = int(validation_length * 0.8)
+            test_length = validation_length - val_length
+            validation_set, testing_set = random_split(validation_set, lengths=[val_length, test_length])
+        else:
+            # Transductive
+            testing_set = validation_set
+
         training_loader = DataLoader(training_set, batch_size=self.batch_size, shuffle=True, pin_memory=True)
         validation_loader = DataLoader(validation_set, batch_size=self.batch_size, shuffle=False, pin_memory=True)
+        testing_loader = DataLoader(testing_set, batch_size=self.batch_size, shuffle=False, pin_memory=True)
 
         self.encoder = self.encoder.to(self.device)
         self.decoder = self.decoder.to(self.device)
@@ -214,4 +225,15 @@ class AttackNetwork():
 
         # Second stage, generate training pairs and train decoder
         fake_loader = self.generate_fake_data(training_loader, validation_loader)
-        self.train_decoder(fake_loader, validation_loader)
+        self.train_decoder(fake_loader, testing_loader)
+
+        # Third stage, test the result
+        testing_result = self.validation(testing_loader)
+        record = open('./'+'Attack_'+self.config['dataset']+'_'+self.config['model']+'_'+self.config['encoder']+'_'+self.config['loss']+'_'+self.config['target']+'.txt', 'a')
+        print('---------------------------------------')
+        record.write('-------------------------------------------------\n')
+        print("Final testing result")
+        record.write("Final testing result")
+        for key,val in testing_result.items():
+            print(f"{key}:{val:.4f}")
+            record.write(f"{key}:{val:.4f}\n")
