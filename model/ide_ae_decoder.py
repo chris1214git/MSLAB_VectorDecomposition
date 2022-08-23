@@ -57,13 +57,15 @@ class Discriminator(nn.Module):
             nn.BatchNorm1d(input_dim*4),
             nn.Sigmoid(),
             nn.Dropout(dropout),
-            nn.Linear(input_dim*4, output_dim),
-            nn.BatchNorm1d(output_dim),
+            nn.Linear(input_dim*4, output_dim+1),
+            nn.BatchNorm1d(output_dim+1),
         )
+        self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, embs):
         recons = self.decoder(embs)
-        return recons
+        probs = self.softmax(recons)
+        return recons, probs
 
 class Classifier(nn.Module):
     def __init__(self, input_dim=768, output_dim=2):
@@ -365,7 +367,7 @@ class IDEAEDecoder:
         # self.ae.eval()
         self.generator.train()
         self.discriminator.eval()
-        self.classifier.eval()
+        # self.classifier.eval()
 
         for batch, (corpus, embs, labels, masks) in enumerate(loader):
             real_embs, labels, masks = embs.to(self.device), labels.to(self.device), masks.to(self.device)
@@ -376,7 +378,7 @@ class IDEAEDecoder:
             real_embs_t = real_embs
             
             # fake label from BERT
-            noise = torch.empty(cur_batch_size, dtype=torch.long).random_(len(self.train_set))
+            # noise = torch.empty(cur_batch_size, dtype=torch.long).random_(len(self.train_set))
             noise_docs = []
             noise_labels = torch.FloatTensor([])
             for i in range(cur_batch_size):     
@@ -387,8 +389,11 @@ class IDEAEDecoder:
             fake_embs = self.generator(noise_docs).to(self.device)
 
             mixed_embs = torch.cat((real_embs_t, fake_embs), dim=0)
-            logits, probs = self.classifier(mixed_embs)
-            recons = self.discriminator(mixed_embs)         
+            # logits, probs = self.classifier(mixed_embs)
+            recons, probs = self.discriminator(mixed_embs)
+            logits = recons[:, -1]
+            recons = recons[:, :-1]
+                      
 
             recons_list = torch.split(recons, cur_batch_size)
             D_real_recons = recons_list[0]
@@ -430,7 +435,7 @@ class IDEAEDecoder:
         # self.ae.train()
         self.generator.eval()
         self.discriminator.train()
-        self.classifier.train()
+        # self.classifier.train()
 
         for batch, (corpus, embs, labels, masks) in enumerate(loader):
             real_embs, labels, masks = embs.to(self.device), labels.to(self.device), masks.to(self.device)
@@ -441,7 +446,7 @@ class IDEAEDecoder:
             real_embs_t = real_embs
             
             # fake label from BERT
-            noise = torch.empty(cur_batch_size, dtype=torch.long).random_(len(self.train_set))
+            # noise = torch.empty(cur_batch_size, dtype=torch.long).random_(len(self.train_set))
             noise_docs = []
             noise_labels = torch.FloatTensor([])
             for i in range(cur_batch_size):     
@@ -452,8 +457,10 @@ class IDEAEDecoder:
             fake_embs = self.generator(noise_docs).to(self.device)
 
             mixed_embs = torch.cat((real_embs_t, fake_embs), dim=0)
-            logits, probs = self.classifier(mixed_embs)
-            recons = self.discriminator(mixed_embs)
+            # logits, probs = self.classifier(mixed_embs)
+            recons, probs = self.discriminator(mixed_embs)
+            logits = recons[:, -1]
+            recons = recons[:, :-1]
 
             recons_list = torch.split(recons, cur_batch_size)
             D_real_recons = recons_list[0]
@@ -476,7 +483,7 @@ class IDEAEDecoder:
             
             # Disciminator's LOSS
             recon_loss = torch.masked_select(Singular_MythNet(D_real_recons, labels), torch.flatten(masks))
-            g_recon_weight =  D_fake_probs[:, 0]
+            g_recon_weight =  1 - D_fake_probs[:, -1] + self.eps
             fake_recon_loss = Singular_MythNet(D_fake_recons, fake_labels) * g_recon_weight
             labeled_count = recon_loss.type(torch.float32).numel()
             
@@ -484,13 +491,13 @@ class IDEAEDecoder:
                 D_L_Supervised = torch.mean(fake_recon_loss)
             else:
                 D_L_Supervised = torch.mean(recon_loss) + torch.mean(fake_recon_loss)                    
-            dis_loss = D_L_Supervised# + cls_loss
+            dis_loss = D_L_Supervised + cls_loss
             
-            self.cls_optimizer.zero_grad()
-            cls_loss.backward(retain_graph=True)
-            self.cls_optimizer.step()
-            if self.config['scheduler']:
-                self.cls_scheduler.step()
+            # self.cls_optimizer.zero_grad()
+            # cls_loss.backward(retain_graph=True)
+            # self.cls_optimizer.step()
+            # if self.config['scheduler']:
+            #     self.cls_scheduler.step()
                 
             self.dis_optimizer.zero_grad()
             # self.ae_optimizer.zero_grad()
@@ -588,8 +595,10 @@ class IDEAEDecoder:
                 # embs_t, _ = self.ae(embs)
                 embs_t = embs
                 
-                logits, probs = self.classifier(embs_t)
-                recons = self.discriminator(embs_t)
+                # logits, probs = self.classifier(embs_t)
+                recons, probs = self.discriminator(embs_t)
+                logits = recons[:, -1]
+                recons = recons[:, :-1]
                 
                 # Precision for reconstruct
                 precision_scores = retrieval_precision_all(recons, labels, k=self.config['topk'])
@@ -657,7 +666,7 @@ class IDEAEDecoder:
     def gan_fit(self):
         # self.ae.to(self.device)
         self.generator.to(self.device)
-        self.classifier.to(self.device)
+        # self.classifier.to(self.device)
         self.discriminator.to(self.device)
 
         train_loader = DataLoader(self.train_set, batch_size=self.config['batch_size'], shuffle=True, num_workers=self.num_data_loader_workers)
