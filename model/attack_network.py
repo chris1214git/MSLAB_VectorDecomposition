@@ -26,7 +26,7 @@ class AttackDataset(Dataset):
         assert len(emb) == len(target) and len(target) == len(documents)
         self.documents = documents
         self.emb = torch.FloatTensor(emb)
-        self.target = torch.FloatTensor(target)        
+        self.target = torch.FloatTensor(target)
         
     def __getitem__(self, idx):
         return self.documents[idx], self.emb[idx], self.target[idx]

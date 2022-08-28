@@ -71,20 +71,18 @@ if __name__ =='__main__':
         label = labels[config['target']]
         vocabularys = vocabularys[config['target']]
 
-    # generating document embedding
-    doc_embs, doc_model, device = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
-    print('[INFO] Single Dataset')
-    # word embedding preparation
-    word_embeddings = get_word_embs(vocabularys, word_emb_file='../../data/glove.6B.300d.txt', data_type='tensor')
-    
-    model = AttackNetwork(config=config, vocabulary=vocabularys, contextual_size=doc_embs.shape[1], word_embeddings=word_embeddings)
-    model.fit(preprocessed_corpus, doc_embs, label)
-    # # Declare model & train
-    # while True:
-    #     try:
-    #         model = AttackNetwork(config=config, vocabulary=vocabularys, contextual_size=doc_embs.shape[1], word_embeddings=word_embeddings)
-    #         model.fit(training_set, testing_set)
-    #         break
-    #     except:
-    #         print('[Error] CUDA Memory Insufficient, retry after 15 secondes.')
-    #         time.sleep(15)
+
+    # Declare model & train
+    while True:
+        try:
+            # generating document embedding
+            doc_embs, doc_model, device = get_preprocess_document_embs(preprocessed_corpus, config['encoder'])
+            print('[INFO] Single Dataset')
+            # word embedding preparation
+            word_embeddings = get_word_embs(vocabularys, word_emb_file='../../data/glove.6B.300d.txt', data_type='tensor')
+            model = AttackNetwork(config=config, vocabulary=vocabularys, contextual_size=doc_embs.shape[1], word_embeddings=word_embeddings)
+            model.fit(preprocessed_corpus, doc_embs, label)
+            break
+        except:
+            print('[Error] CUDA Memory Insufficient, retry after 15 secondes.')
+            time.sleep(15)
