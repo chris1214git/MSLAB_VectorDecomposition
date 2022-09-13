@@ -131,13 +131,18 @@ if __name__ =='__main__':
         dataset = MLPDataset(doc_embs, label)
         training_length = int(len(dataset) * config['ratio'])
         validation_length = len(dataset) - training_length
+
         training_set, validation_set = random_split(dataset, lengths=[training_length, validation_length],generator=torch.Generator().manual_seed(42))
+
+        val_length = int(validation_length * 0.8)
+        test_length = validation_length - val_length
+        validation_set, testing_set = random_split(validation_set, lengths=[val_length, test_length])
         
         # Declare model & train
         while True:
             try:
                 model = MLP(config=config, vocabulary=vocabularys, contextual_size=doc_embs.shape[1], word_embeddings=word_embeddings)
-                model.fit(training_set, validation_set)
+                model.fit(training_set, testing_set)
                 break
             except:
                 print('[Error] CUDA Memory Insufficient, retry after 15 secondes.')

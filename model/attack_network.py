@@ -211,7 +211,9 @@ class AttackNetwork():
             validation_set, testing_set = random_split(validation_set, lengths=[val_length, test_length])
         else:
             # Transductive
-            testing_set = validation_set
+            val_length = int(validation_length * 0.8)
+            test_length = validation_length - val_length
+            _, testing_set = random_split(validation_set, lengths=[val_length, test_length])
 
         training_loader = DataLoader(training_set, batch_size=self.batch_size, shuffle=True, pin_memory=True)
         validation_loader = DataLoader(validation_set, batch_size=self.batch_size, shuffle=False, pin_memory=True)
