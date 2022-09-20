@@ -53,7 +53,9 @@ def generate_dataset(config):
     valid_idx = idx[train_length:]
 
     train_unpreprocessed_corpus = list(np.array(unpreprocessed_corpus)[train_idx])
+    trina_preprocessed_corpus = list(np.array(preprocessed_corpus)[train_idx])
     valid_unpreprocessed_corpus = list(np.array(unpreprocessed_corpus)[valid_idx])
+    valid_preprocessed_corpus = list(np.array(preprocessed_corpus)[valid_idx])
     train_embs = np.array(doc_embs)[train_idx]
     valid_embs = np.array(doc_embs)[valid_idx]
     train_label = np.array(label)[train_idx]
@@ -84,12 +86,13 @@ def generate_dataset(config):
                     balance = 1
                 for b in range(0, int(balance)):
                     train_unpreprocessed_corpus.append(train_unpreprocessed_corpus[idx])
+                    trina_preprocessed_corpus.append(trina_preprocessed_corpus[idx])
                     train_embs = np.concatenate((train_embs, train_embs[idx].reshape(1, train_embs.shape[1])), axis=0)
                     train_label = np.concatenate((train_label, train_label[idx].reshape(1, train_label.shape[1])), axis=0)
                     label_masks = np.concatenate((label_masks, label_masks[idx].reshape(1, label_masks.shape[1])), axis=0)
     
-    training_set = IDEDataset(train_unpreprocessed_corpus, train_embs, train_label, label_masks)
-    validation_set = IDEDataset(valid_unpreprocessed_corpus, valid_embs, valid_label, np.ones((valid_embs.shape[0], 1), dtype=bool))
+    training_set = IDEDataset(train_unpreprocessed_corpus, trina_preprocessed_corpus, train_embs, train_label, label_masks)
+    validation_set = IDEDataset(valid_unpreprocessed_corpus, valid_preprocessed_corpus, valid_embs, valid_label, np.ones((valid_embs.shape[0], 1), dtype=bool))
     
     return training_set, validation_set, vocabularys, id2token, device 
 
@@ -148,8 +151,8 @@ if __name__ =='__main__':
     # Generate dataset
     training_set, validation_set, vocabularys, id2token, device = generate_dataset(config)
     model = IDEAEDecoder(config, training_set, validation_set, vocabularys, id2token, device)
-    if config['ae'] !='no':
-        model.ae_fit()
+    #if config['ae'] !='no':
+    #    model.ae_fit()
     if config['model'] == 'mlp':
         model.mlp_fit()
     else:

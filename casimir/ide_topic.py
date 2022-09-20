@@ -165,8 +165,9 @@ if __name__ =='__main__':
         # prepare dataset
         dataset = IDEDataset(unpreprocessed_corpus, doc_embs, label)
         training_length = int(len(dataset) * config['ratio'])
-        validation_length = len(dataset) - training_length
-        training_set, validation_set = random_split(dataset, lengths=[training_length, validation_length],generator=torch.Generator().manual_seed(42))
+        remain_length = int(len(dataset) * (0.8 - config['ratio']))
+        validation_length = len(dataset) - training_length - remain_length
+        training_set, remain_set, validation_set = random_split(dataset, lengths=[training_length, remain_length, validation_length], generator=torch.Generator().manual_seed(42))
 
         while True:
             try:

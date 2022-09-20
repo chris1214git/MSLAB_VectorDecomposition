@@ -1,6 +1,13 @@
 import torch
 import torch.nn as nn
 
+def ContrastiveLoss(x_embs, y_embs, label, margin=2.0):
+    euclidean_distance = torch.cdist(x_embs, y_embs, p=2)
+    loss = torch.mean((1 - label) * torch.pow(euclidean_distance, 2) +
+                    (label) * torch.pow(torch.clamp(margin - euclidean_distance, min=0.0), 2))
+
+    return loss
+
 def MSE(y_pred, y_true):
     loss = nn.MSELoss(reduction='none')(y_pred, y_true)
     return torch.mean(torch.sum(loss, dim=1))

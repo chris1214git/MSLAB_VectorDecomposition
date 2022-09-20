@@ -78,19 +78,19 @@ class DecoderNetwork(nn.Module):
         )
         ## architecture - concatenate
         self.con_full_decoder_tanh = nn.Sequential(
-            nn.Linear(contextual_size+vocab_size, (contextual_size+vocab_size)*4),
-            nn.BatchNorm1d((contextual_size+vocab_size)*4),
+            nn.Linear(contextual_size+vocab_size, contextual_size*4),
+            nn.BatchNorm1d(contextual_size*4),
             nn.Tanh(),
             nn.Dropout(p=0.2),
-            nn.Linear((contextual_size+vocab_size)*4, vocab_size),
+            nn.Linear(contextual_size*4, vocab_size),
             nn.BatchNorm1d(vocab_size),
         )
         self.con_full_decoder_sigmoid = nn.Sequential(
-            nn.Linear(contextual_size+vocab_size, (contextual_size+vocab_size)*4),
-            nn.BatchNorm1d((contextual_size+vocab_size)*4),
+            nn.Linear(contextual_size+vocab_size, contextual_size*4),
+            nn.BatchNorm1d(contextual_size*4),
             nn.Sigmoid(),
             nn.Dropout(p=0.2),
-            nn.Linear((contextual_size+vocab_size)*4, vocab_size),
+            nn.Linear(contextual_size*4, vocab_size),
             nn.BatchNorm1d(vocab_size),
         )
         ## architecture - concatenate_word
