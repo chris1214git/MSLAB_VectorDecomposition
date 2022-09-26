@@ -14,7 +14,7 @@ from transformers import AdamW, get_linear_schedule_with_warmup, get_constant_sc
 # from tqdm.auto import tqdm
 
 sys.path.append("./")
-from utils.loss import MythNet, ContrastiveLoss
+from utils.loss import MythNet
 from utils.eval import retrieval_normalized_dcg_all, retrieval_precision_all, semantic_precision_all, retrieval_precision_all_v2, semantic_precision_all_v2
 from utils.toolbox import get_free_gpu, record_settings
 from model.inference_network import ContextualInferenceNetwork
@@ -79,110 +79,198 @@ class Classifier(nn.Module):
         return logits, probs
 
 class FeatureExtractor(nn.Module):
-  def __init__(self, input_dim, feature_dim, hidden_dim=1024):
-    super(FeatureExtractor, self).__init__()
-    self.input_dim = input_dim
-    self.feature_dim = feature_dim
-    self.hidden_dim = hidden_dim
-    self.cnn1d = nn.Sequential(
-        nn.Conv1d(input_dim, hidden_dim, 1, stride=2),
-        nn.ReLU(),
-        nn.Conv1d(hidden_dim, hidden_dim*2, 1, stride=2),
-        nn.ReLU(),
-    )
-    self.fc1d = nn.Sequential(
-        nn.Linear(hidden_dim*2, hidden_dim),
-        nn.BatchNorm1d(hidden_dim),
-        nn.Sigmoid(),
-        nn.Linear(hidden_dim, feature_dim),
-    )
-    # h_output = (h_input - h_kernel + 2 * padding) / stride + 1
-    # w_output = (w_input - w_kernel + 2 * padding) / stride + 1
+    def __init__(self, input_dim, feature_dim, hidden_dim=1024, dropout=0.2):
+        super(FeatureExtractor, self).__init__()
+        self.input_dim = input_dim
+        self.feature_dim = feature_dim
+        self.hidden_dim = hidden_dim
+        self.cnn1d = nn.Sequential(
+            nn.Conv1d(input_dim, hidden_dim, 1, stride=2),
+            nn.ReLU(),
+            nn.Conv1d(hidden_dim, hidden_dim*2, 1, stride=2),
+            nn.ReLU(),
+        )
+        self.fc1d = nn.Sequential(
+            nn.Linear(hidden_dim*2, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
+            nn.Sigmoid(),
+            nn.Linear(hidden_dim, feature_dim),
+        )
+        # h_output = (h_input - h_kernel + 2 * padding) / stride + 1
+        # w_output = (w_input - w_kernel + 2 * padding) / stride + 1
+
+        ## structure 2
+        # self.cnn2d = nn.Sequential(
+        #     nn.Conv2d(1, 6, (3, 3), stride=1),
+        #     nn.ReLU(),
+        # )
+        # self.fc2d = nn.Sequential(
+        #     nn.Linear(6 * 1 * 766, hidden_dim),
+        #     nn.BatchNorm1d(hidden_dim),
+        #     nn.Sigmoid(),
+        #     nn.Linear(hidden_dim, feature_dim)
+        # )
+
+        ## strucure 3
+        # self.cnn2d = nn.Sequential(
+        #     nn.Conv2d(1, 12, (2, 2), stride=1),
+        #     nn.ReLU(),
+        #     nn.MaxPool2d((2, 1), stride=1)
+        # )
+        # self.fc2d = nn.Sequential(
+        #     nn.Linear(12 * 1 * 767, hidden_dim),
+        #     nn.BatchNorm1d(hidden_dim),
+        #     nn.Sigmoid(),
+        #     nn.Linear(hidden_dim, feature_dim)
+        # )
+
+        ## strucure 5
+        self.cnn2d = nn.Sequential(
+            nn.Conv2d(1, 8, (2, 1), stride=1),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool2d((2, 768))
+        )
+        self.fc2d = nn.Sequential(
+            nn.Linear(8 * 2 * 768, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
+            nn.Sigmoid(),
+            nn.Linear(hidden_dim, feature_dim)
+        )
+
+        self.fc_1st = nn.Sequential(
+            nn.Linear(input_dim, input_dim),
+            nn.BatchNorm1d(input_dim),
+            nn.Sigmoid(),
+            nn.Linear(input_dim, input_dim),
+        )
+        self.fc_2nd = nn.Sequential(
+            nn.Linear(input_dim, input_dim),
+            nn.BatchNorm1d(input_dim),
+            nn.Sigmoid(),
+            nn.Linear(input_dim, input_dim),
+        )
+
+        self.query = nn.Linear(input_dim, input_dim)
+        self.key = nn.Linear(input_dim, input_dim)
+        self.value = nn.Linear(input_dim, input_dim)
+        self.attention = nn.MultiheadAttention(input_dim, 8)
+        self.fcattn = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
+            nn.Sigmoid(),
+            nn.Linear(hidden_dim, feature_dim),
+        )
+
+    def forward(self, embs, reals):
+        # 1D Convolution
+        # conv_embs = self.cnn1d(embs.unsqueeze(dim=-1))
+        # feature = self.fc1d(conv_embs.squeeze(dim=-1))
+
+        # 2D Convolution
+        embs_1st = self.fc_1st(embs)
+        embs_2nd = self.fc_2nd(embs_1st)
+        embs_2d = torch.stack((embs, embs_1st, embs_2nd), dim=1)
+        conv_embs = self.cnn2d(embs_2d.unsqueeze(dim=1))
+        feature = self.fc2d(torch.flatten(conv_embs, 1))
+
+        # attention block
+        # q = self.query(embs)
+        # k = self.key(embs)
+        # v = embs
+        # attn_embs, _ = self.attention(q, k, v)
+        # feature = self.fcattn(attn_embs)
+
+        feature = reals * embs + (1 - reals) * feature
+
+        return feature
+
+class DecoderNetwork(nn.Module):
+    def __init__(self, config, device, vocab_size, contextual_size, glove_word_embeddings, n_components, hidden_sizes=(100,100), activation='relu', dropout=0.2, learn_priors=True):
+        super(DecoderNetwork, self).__init__()
+
+        assert activation in ['softplus', 'relu']
+
+        self.config = config
+        self.device = device
+        self.vocab_size = vocab_size
+        self.contextual_size = contextual_size
+        self.glove_word_embeddings = glove_word_embeddings
+        self.n_components = n_components
+        self.hidden_sizes = hidden_sizes
+        self.activation = activation
+        self.dropout = dropout
+        self.learn_priors = learn_priors
+        self.topic_word_matrix = None
+
+        # decoder architecture
+        self.batch_norm = nn.BatchNorm1d(vocab_size)
+        self.word_embedding =  nn.Parameter(torch.randn(vocab_size*4, vocab_size))
+
+        self.decoder = nn.Sequential(
+            nn.Linear(contextual_size+vocab_size, contextual_size*4),
+            nn.BatchNorm1d(contextual_size*4),
+            nn.Sigmoid(),
+            nn.Dropout(p=0.2),
+            nn.Linear(contextual_size*4, vocab_size),
+            nn.BatchNorm1d(vocab_size),
+        )
+        
+        # topic model architecture
+        self.inf_net = ContextualInferenceNetwork(vocab_size, contextual_size, n_components, hidden_sizes, activation, label_size=0)
+        
+        topic_prior_mean = 0.0
+        self.prior_mean = torch.tensor([topic_prior_mean] * n_components).to(device)
+        if self.learn_priors:
+            self.prior_mean = nn.Parameter(self.prior_mean)
+
+        topic_prior_variance = 1. - (1. / self.n_components)
+        self.prior_variance = torch.tensor([topic_prior_variance] * n_components).to(device)
+        if self.learn_priors:
+            self.prior_variance = nn.Parameter(self.prior_variance)
+
+        self.beta = torch.Tensor(n_components, vocab_size).to(device)
+        self.beta = nn.Parameter(self.beta)
+        
+        nn.init.xavier_uniform_(self.beta)
+        
+        self.beta_batchnorm = nn.BatchNorm1d(vocab_size, affine=False)
+        
+        self.drop_theta = nn.Dropout(p=self.dropout)
     
-    ## structure 2
-    # self.cnn2d = nn.Sequential(
-    #     nn.Conv2d(1, 6, (3, 3), stride=1),
-    #     nn.ReLU(),
-    # )
-    # self.fc2d = nn.Sequential(
-    #     nn.Linear(6 * 1 * 766, hidden_dim),
-    #     nn.BatchNorm1d(hidden_dim),
-    #     nn.Sigmoid(),
-    #     nn.Linear(hidden_dim, feature_dim)
-    # )
+    @staticmethod
+    def reparameterize(mu, logvar):
+        """Reparameterize the theta distribution."""
+        std = torch.exp(0.5*logvar)
+        eps = torch.randn_like(std)
+        return eps.mul(std).add_(mu)
 
-    ## strucure 3
-    # self.cnn2d = nn.Sequential(
-    #     nn.Conv2d(1, 12, (2, 2), stride=1),
-    #     nn.ReLU(),
-    #     nn.MaxPool2d((2, 1), stride=1)
-    # )
-    # self.fc2d = nn.Sequential(
-    #     nn.Linear(12 * 1 * 767, hidden_dim),
-    #     nn.BatchNorm1d(hidden_dim),
-    #     nn.Sigmoid(),
-    #     nn.Linear(hidden_dim, feature_dim)
-    # )
+    def forward(self, emb, target, labels=None):
+        """Forward pass."""
+        posterior_mu, posterior_log_sigma = self.inf_net(target, emb, labels)
+        posterior_sigma = torch.exp(posterior_log_sigma)
 
-    ## strucure 5
-    self.cnn2d = nn.Sequential(
-        nn.Conv2d(1, 12, (2, 2), stride=1),
-        nn.ReLU(),
-        nn.AdaptiveAvgPool2d((2, 768))
-    )
-    self.fc2d = nn.Sequential(
-        nn.Linear(12 * 2 * 768, hidden_dim),
-        nn.BatchNorm1d(hidden_dim),
-        nn.Sigmoid(),
-        nn.Linear(hidden_dim, feature_dim)
-    )
+        # generate samples from theta
+        theta = F.softmax(self.reparameterize(posterior_mu, posterior_log_sigma), dim=1)
+        theta = self.drop_theta(theta)
 
-    self.fc_1st = nn.Sequential(
-        nn.Linear(input_dim, input_dim),
-        nn.BatchNorm1d(input_dim),
-        nn.Sigmoid(),
-        nn.Linear(input_dim, input_dim),
-    )
-    self.fc_2nd = nn.Sequential(
-        nn.Linear(input_dim, input_dim),
-        nn.BatchNorm1d(input_dim),
-        nn.Sigmoid(),
-        nn.Linear(input_dim, input_dim),
-    )
-
-    self.query = nn.Linear(input_dim, input_dim)
-    self.key = nn.Linear(input_dim, input_dim)
-    self.value = nn.Linear(input_dim, input_dim)
-    self.attention = nn.MultiheadAttention(input_dim, 8)
-    self.fcattn = nn.Sequential(
-        nn.Linear(input_dim, hidden_dim),
-        nn.BatchNorm1d(hidden_dim),
-        nn.Sigmoid(),
-        nn.Linear(hidden_dim, feature_dim),
-    )
-
-  def forward(self, embs, reals):
-    # 1D Convolution
-    # conv_embs = self.cnn1d(embs.unsqueeze(dim=-1))
-    # feature = self.fc1d(conv_embs.squeeze(dim=-1))
+        # prodLDA
+        # in: batch_size x input_size x n_components
+        word_dist = F.softmax(self.beta_batchnorm(torch.matmul(theta, self.beta)), dim=1)
+        # word_dist: batch_size x input_size
+        word_dist_for_decoder = word_dist.detach()
+        self.topic_word_matrix = self.beta
+        emb_word_dist = torch.cat((word_dist_for_decoder, emb), dim=1)
+        decoded_word_dist = self.decoder(emb_word_dist)
+        recon_dist = decoded_word_dist
+        
+        return self.prior_mean, self.prior_variance, posterior_mu, posterior_sigma, posterior_log_sigma, word_dist, recon_dist
     
-    # 2D Convolution
-    # embs_1st = self.fc_1st(embs)
-    # embs_2nd = self.fc_2nd(embs_1st)
-    # embs_2d = torch.stack((embs, embs_1st, embs_2nd), dim=1)
-    # conv_embs = self.cnn2d(embs_2d.unsqueeze(dim=1))
-    # feature = self.fc2d(torch.flatten(conv_embs, 1))
-    
-    # attention block
-    q = self.query(embs)
-    k = self.key(embs)
-    v = embs
-    attn_embs, _ = self.attention(q, k, v)
-    feature = self.fcattn(attn_embs)
+    def get_theta(self, target, emb, labels=None):
+        with torch.no_grad():
+            posterior_mu, posterior_log_sigma = self.inf_net(target, emb, labels)
+            theta = F.softmax(self.reparameterize(posterior_mu, posterior_log_sigma), dim=1)
 
-    feature = reals * embs + (1 - reals) * feature
-
-    return feature
+            return theta
 
 class IDEDADecoder:
     def __init__(self, config, label_set, unlabel_set, valid_set, vocab = None, id2token=None, device=None, contextual_dim=768, encoded_dim=768, noise_dim=100, word_embeddings=None, dropout=0.2, momentum=0.99, num_data_loader_workers=mp.cpu_count(), loss_weights=None, eps=1e-8):
@@ -196,7 +284,7 @@ class IDEDADecoder:
         self.device = device
         self.contextual_dim = contextual_dim
         self.encoded_dim = encoded_dim
-        self.noise_dim = noise_dim
+        self.n_components = 50
         self.word_embeddings = word_embeddings
         self.dropout = dropout
         self.momentum = momentum
@@ -210,7 +298,12 @@ class IDEDADecoder:
 
         # model
         self.encoder = Encoder(device)
-        self.decoder = Decoder(input_dim=contextual_dim, output_dim=len(vocab))
+        if config['model'] == 'tsdm':
+            self.decoder = DecoderNetwork(
+                    config, device, len(vocab), contextual_dim, word_embeddings, n_components=50, hidden_sizes=(100, 100), activation='relu',
+                    dropout=dropout, learn_priors=True)
+        else:
+            self.decoder = Decoder(input_dim=contextual_dim, output_dim=len(vocab))
         self.classifier = Classifier(input_dim=encoded_dim, output_dim=2)
         self.extractor = FeatureExtractor(input_dim=contextual_dim, feature_dim=encoded_dim)
         
@@ -256,16 +349,16 @@ class IDEDADecoder:
         self.extractor.train()
 
         for batch, (docs, corpus, embs, labels, reals) in enumerate(loader):
-            real_embs = embs.to(self.device)
+            real_embs, reals = embs.to(self.device), reals.to(self.device)
             
             real_embs_t = real_embs
+            # real_embs_t = self.extractor(real_embs, reals)
             
             # fake label from BERT            
             fake_embs = self.encoder(corpus).to(self.device)
             fake_embs = self.extractor(fake_embs, torch.zeros([embs.shape[0], 1], dtype=torch.long).to(self.device))
 
             # Encoder's LOSS
-            # e_loss_d = -1 * torch.mean(torch.log(1 - D_fake_probs[:,-1] + self.eps))
             # e_cos = torch.nn.functional.cosine_similarity(torch.mean(real_embs_t, dim=0), torch.mean(fake_embs, dim=0), dim=0)
             e_cos = torch.mean(torch.nn.functional.cosine_similarity(real_embs_t, fake_embs))
             # e_feat_emb = torch.mean(torch.pow(torch.mean(real_embs_t, dim=0) - torch.mean(fake_embs, dim=0), 2))
@@ -307,13 +400,14 @@ class IDEDADecoder:
         
         with torch.no_grad():
             for batch, (docs, corpus, embs, labels, reals) in enumerate(loader):
-                embs = embs.to(self.device)
+                embs, reals = embs.to(self.device), reals.to(self.device)
+
                 real_embs_t = embs
+                # real_embs_t = self.extractor(embs, reals)
                 
                 fake_embs = self.encoder(corpus).to(self.device)
                 fake_embs = self.extractor(fake_embs, torch.zeros([embs.shape[0], 1], dtype=torch.long).to(self.device))
 
-                # e_loss_d = -1 * torch.mean(torch.log(1 - D_fake_probs[:,-1] + self.eps))
                 # e_cos = torch.nn.functional.cosine_similarity(torch.mean(real_embs_t, dim=0), torch.mean(fake_embs, dim=0), dim=0)
                 e_cos = torch.mean(torch.nn.functional.cosine_similarity(real_embs_t, fake_embs))
                 # e_feat_emb = torch.mean(torch.pow(torch.mean(real_embs_t, dim=0) - torch.mean(fake_embs, dim=0), 2))
@@ -432,6 +526,8 @@ class IDEDADecoder:
         de_loss_weight = 1
         cls_loss_weight = 10
         
+        samples_processed = 0
+        
         self.classifier.eval()
         self.decoder.train()
         self.extractor.train()
@@ -441,7 +537,7 @@ class IDEDADecoder:
 
             # Extract features
             features = self.extractor(embs, reals)
-            distance_loss = torch.mean(torch.pow(torch.mean(features * reals, dim=0) - torch.mean(features * (1 - reals), dim=0), 2))
+            # distance_loss = torch.mean(torch.pow(torch.mean(features * reals, dim=0) - torch.mean(features * (1 - reals), dim=0), 2))
             # features = embs
             
             # Classifier discrimiate features
@@ -450,20 +546,41 @@ class IDEDADecoder:
             cls_loss = self.cross_entropy(probs, torch.flatten(1 - reals))
             # cls_loss = torch.reciprocal(self.cross_entropy(probs, torch.flatten(reals)) + self.eps)
 
-            # Decoder reconstruct embs
-            recons = self.decoder(features)
-            
-            # ListNet Loss
-            de_loss = de_loss_weight * MythNet(recons, labels) + cls_loss_weight * cls_loss + distance_loss
-            
+            if self.config['model'] == 'tsdm':
+                labels = labels.reshape(labels.shape[0], -1)
+                prior_mean, prior_variance, posterior_mean, posterior_variance,\
+                    posterior_log_variance, word_dists, recons = self.decoder(features, labels)
+
+                var_division = torch.sum(posterior_variance / prior_variance, dim=1)
+                diff_means = prior_mean - posterior_mean
+                diff_term = torch.sum((diff_means * diff_means) / prior_variance, dim=1)
+                logvar_det_division = prior_variance.log().sum() - posterior_log_variance.sum(dim=1)
+                
+                samples_processed = labels.size()[0]
+                
+                KL = 0.5 * (var_division + diff_term - self.n_components + logvar_det_division)
+                RL = torch.sum(-labels * torch.log(word_dists + 1e-10), dim=1)
+                DL = MythNet(recons, labels)
+
+                loss = (KL + RL) / samples_processed + DL
+                loss = loss.sum()
+
+                de_loss = de_loss_weight * loss + cls_loss_weight * cls_loss
+                ex_loss = de_loss_weight * DL + cls_loss_weight * cls_loss
+            else:
+                # Decoder reconstruct embs
+                recons = self.decoder(features)
+
+                # ListNet Loss
+                de_loss = de_loss_weight * MythNet(recons, labels) + cls_loss_weight * cls_loss  
+                ex_loss = de_loss + cls_loss_weight * cls_loss     
+
             self.de_optimizer.zero_grad()
             self.ex_optimizer.zero_grad()
-            
             de_loss.backward()
-            
+            # ex_loss.backward()
             self.de_optimizer.step()
             self.ex_optimizer.step()
-
             if self.config['scheduler']:
                 self.de_scheduler.step()
                 self.ex_scheduler.step()
@@ -492,7 +609,7 @@ class IDEDADecoder:
                 
                 # Extract features
                 features = self.extractor(embs, reals)
-                distance_loss = torch.mean(torch.pow(torch.mean(features * reals, dim=0) - torch.mean(features * (1 - reals), dim=0), 2))
+                # distance_loss = torch.mean(torch.pow(torch.mean(features * reals, dim=0) - torch.mean(features * (1 - reals), dim=0), 2))
                 # features = embs
 
                 # Clssifier
@@ -502,11 +619,31 @@ class IDEDADecoder:
                 # de_cls_loss = torch.reciprocal(self.cross_entropy(probs, torch.flatten(reals)) + self.eps)
                 de_cls_loss = self.cross_entropy(probs, torch.flatten(1 - reals))
 
-                # Decoder reconstruct
-                recons = self.decoder(features)
-                
-                # ListNet Loss
-                de_loss = de_loss_weight * MythNet(recons, labels) + cls_loss_weight * de_cls_loss + distance_loss
+                if self.config['model'] == 'tsdm':
+                    labels = labels.reshape(labels.shape[0], -1)
+                    prior_mean, prior_variance, posterior_mean, posterior_variance,\
+                        posterior_log_variance, word_dists, recons = self.decoder(features, labels)
+
+                    var_division = torch.sum(posterior_variance / prior_variance, dim=1)
+                    diff_means = prior_mean - posterior_mean
+                    diff_term = torch.sum((diff_means * diff_means) / prior_variance, dim=1)
+                    logvar_det_division = prior_variance.log().sum() - posterior_log_variance.sum(dim=1)
+
+                    KL = 0.5 * (var_division + diff_term - self.n_components + logvar_det_division)
+                    RL = torch.sum(-labels * torch.log(word_dists + 1e-10), dim=1)
+                    DL = MythNet(recons, labels)
+
+                    topic_loss = KL + RL + DL
+                    topic_loss = topic_loss.sum()
+
+                    de_loss = de_loss_weight * DL
+                else:
+                    # Decoder reconstruct
+                    recons = self.decoder(features)
+                    
+                    # ListNet Loss
+                    de_loss = de_loss_weight * MythNet(recons, labels)# + cls_loss_weight * de_cls_loss# + distance_loss
+
                 de_val_loss += de_loss.item()
                 cls_val_loss += cls_loss.item()
                 
