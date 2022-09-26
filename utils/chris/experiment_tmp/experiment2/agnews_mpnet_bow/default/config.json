@@ -1,0 +1,1 @@
+{"experiment_dir": "agnews_mpnet_bow", "experiment_dir2": "default", "dataset_name": "agnews", "model_name": "mpnet", "label_type": "bow", "criterion": "BCE", "n_time": 5, "seed": 123}

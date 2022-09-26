@@ -1,0 +1,1 @@
+{"experiment_dir": "cross_20news_agnews_mpnet_tf-idf_ListNet_sigmoid_L1", "preprocess_config_dir": "parameters_baseline2", "save_dir": "default", "dataset": "20news", "dataset2": "agnews", "model_name": "mpnet", "label_type": "tf-idf", "eval_f1": false, "n_gram": 1, "criterion": "ListNet_sigmoid_L1", "n_time": 3, "seed": 123}

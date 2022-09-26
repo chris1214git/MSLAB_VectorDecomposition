@@ -1,0 +1,1 @@
+{"experiment_dir": "agnews_doc2vec_bow", "experiment_dir2": "default", "dataset_name": "agnews", "model_name": "doc2vec", "label_type": "bow", "criterion": "BCE", "n_time": 5, "seed": 123}
